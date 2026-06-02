@@ -26,7 +26,7 @@ const TABS = [
 const HOME_SECTIONS = [
   {
     label: "Ben.",
-    body: "I go by Commander Zen online. I understand I'm nobody but that's the point. This is just an EDH passion project schlepped together using what I know professionally and what I obsess about personally. It will always be free and available and the best I can make it.",
+    body: "I go by Commander Zen. You probably haven't heard of me but that's the point. This is just an EDH passion project schlepped together by a guy with a bit of professional knowledge, a very specific personal obsession, and the demeanor of Mister Rodgers raised on Run the Jewels. This will always be free and available and the best I can make it.",
   },
   {
     label: "MTG DNA.",

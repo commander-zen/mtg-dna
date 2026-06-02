@@ -84,6 +84,27 @@ function HomeScreen() {
             </div>
           </div>
         ))}
+
+        <div style={{
+          marginTop: 40,
+          paddingTop: 20,
+          borderTop: `1px solid ${C.border}`,
+          textAlign: "center",
+        }}>
+          <a
+            href="https://bsky.app/profile/commanderzen.bsky.social"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 13,
+              color: C.muted,
+              textDecoration: "none",
+              letterSpacing: "0.01em",
+            }}
+          >
+            @commanderzen.bsky.social
+          </a>
+        </div>
       </div>
     </div>
   );

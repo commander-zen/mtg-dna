@@ -1,45 +1,62 @@
-import { useState } from "react";
-import { C } from "./constants";
-import GlassNav from "./components/GlassNav";
-import HomeScreen from "./screens/HomeScreen";
-import CollectionScreen from "./screens/CollectionScreen";
-import BrewScreen from "./screens/BrewScreen";
-import PlayScreen from "./screens/PlayScreen";
-import AnalyzeScreen from "./screens/AnalyzeScreen";
+import { useEffect, useState } from "react";
+import { useTheme } from "./theme/ThemeContext";
+import NavBar from "./components/NavBar";
+
+const PAGES = ["home", "vault", "brew", "table", "notebook"];
+
+const NAV_HEIGHT = 60;
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("analyze");
+  const { theme, mode } = useTheme();
+  const [activePage, setActivePage] = useState("home");
 
-  const navHeight = 90;
+  const textColor = mode === "light" ? theme.ink : theme.white;
 
-  const renderScreen = () => {
-    if (activeTab === "home")       return <HomeScreen />;
-    if (activeTab === "collection") return <CollectionScreen />;
-    if (activeTab === "brew")       return <BrewScreen />;
-    if (activeTab === "play")       return <PlayScreen />;
-    if (activeTab === "analyze")    return <AnalyzeScreen />;
-    return null;
-  };
+  useEffect(() => {
+    document.body.style.margin = "0";
+    document.body.style.padding = "0";
+    document.body.style.background = theme.base;
+    document.body.style.fontFamily = "'Noto Sans', sans-serif";
+  }, [theme.base]);
 
   return (
     <div style={{
       height: "100dvh",
       width: "100%",
+      background: theme.base,
       display: "flex",
       flexDirection: "column",
-      background: C.base,
       overflow: "hidden",
-      position: "relative",
     }}>
       <div style={{
         flex: 1,
-        overflow: "hidden",
-        paddingBottom: navHeight,
+        overflowY: "auto",
+        paddingBottom: NAV_HEIGHT,
+        WebkitOverflowScrolling: "touch",
       }}>
-        {renderScreen()}
+        {PAGES.map((page) => (
+          <div
+            key={page}
+            style={{
+              display: activePage === page ? "flex" : "none",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+            }}
+          >
+            <span style={{
+              fontFamily: "'Zilla Slab', serif",
+              fontSize: 28,
+              color: textColor,
+              textTransform: "capitalize",
+            }}>
+              {page}
+            </span>
+          </div>
+        ))}
       </div>
 
-      <GlassNav active={activeTab} onSelect={setActiveTab} />
+      <NavBar activePage={activePage} onNavigate={setActivePage} />
     </div>
   );
 }

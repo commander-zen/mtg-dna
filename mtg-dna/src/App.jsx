@@ -7,15 +7,11 @@ import Brew from "./pages/Brew";
 import Table from "./pages/Table";
 import Notebook from "./pages/Notebook";
 
-const PAGES = ["home", "vault", "brew", "table", "notebook"];
-
 const NAV_HEIGHT = 60;
 
 export default function App() {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
   const [activePage, setActivePage] = useState("home");
-
-  const textColor = mode === "light" ? theme.ink : theme.white;
 
   useEffect(() => {
     document.body.style.margin = "0";
@@ -38,28 +34,11 @@ export default function App() {
         overflow: "hidden",
         paddingBottom: NAV_HEIGHT,
       }}>
-        {activePage === "home"  && <Home />}
-        {activePage === "vault" && <Vault />}
-        {activePage === "brew"  && <Brew />}
+        {activePage === "home"     && <Home />}
+        {activePage === "vault"    && <Vault />}
+        {activePage === "brew"     && <Brew />}
         {activePage === "table"    && <Table />}
         {activePage === "notebook" && <Notebook />}
-        {activePage !== "home" && activePage !== "vault" && activePage !== "brew" && activePage !== "table" && activePage !== "notebook" && (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100%",
-          }}>
-            <span style={{
-              fontFamily: "'Zilla Slab', serif",
-              fontSize: 28,
-              color: textColor,
-              textTransform: "capitalize",
-            }}>
-              {activePage}
-            </span>
-          </div>
-        )}
       </div>
 
       <NavBar activePage={activePage} onNavigate={setActivePage} />

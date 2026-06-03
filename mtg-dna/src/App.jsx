@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import Vault from "./pages/Vault";
 import Brew from "./pages/Brew";
 import Table from "./pages/Table";
+import Notebook from "./pages/Notebook";
 
 const PAGES = ["home", "vault", "brew", "table", "notebook"];
 
@@ -40,8 +41,9 @@ export default function App() {
         {activePage === "home"  && <Home />}
         {activePage === "vault" && <Vault />}
         {activePage === "brew"  && <Brew />}
-        {activePage === "table" && <Table />}
-        {activePage !== "home" && activePage !== "vault" && activePage !== "brew" && activePage !== "table" && (
+        {activePage === "table"    && <Table />}
+        {activePage === "notebook" && <Notebook />}
+        {activePage !== "home" && activePage !== "vault" && activePage !== "brew" && activePage !== "table" && activePage !== "notebook" && (
           <div style={{
             display: "flex",
             alignItems: "center",

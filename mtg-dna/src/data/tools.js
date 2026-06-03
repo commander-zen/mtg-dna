@@ -5,6 +5,14 @@ export const TOOLS = [
   { tier: "B", name: "Archidekt",          url: "https://archidekt.com",         desc: "Collection tracking built into the deck builder." },
 ];
 
+export const ANALYZE_TOOLS = [
+  { tier: "S", name: "ScryCheck",    url: "https://scrycheck.com",   desc: "93% bracket accuracy. 5 scoring vectors. Every point traceable." },
+  { tier: "S", name: "EDHREC",       url: "https://edhrec.com",      desc: "Card recommendation engine. Commander staples and synergy discovery." },
+  { tier: "A", name: "Playgroup.gg", url: "https://playgroup.gg",    desc: "Win rate tracking, matchup history, ELO over time." },
+  { tier: "B", name: "Play Nice",    url: "https://playnicemtg.com", desc: "MVP card tracking, seat analysis, 21-game rolling win rates." },
+  { tier: "B", name: "MTG Master",   url: "https://mtgmaster.app",   desc: "Shareable power level report for Rule Zero conversations." },
+];
+
 export const PLAY_LIFE_TOOLS = [
   { tier: "S", name: "Lotus",        url: "https://lifecounter.app",       desc: "Cleanest life counter. No ads. Commander damage, all counter types, game timer." },
   { tier: "A", name: "Playgroup.gg", url: "https://playgroup.gg",          desc: "ELO tracking, device-synced logging, Playscore system. 4.9★." },

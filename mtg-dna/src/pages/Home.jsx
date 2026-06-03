@@ -1,25 +1,25 @@
 import { useTheme } from "../theme/ThemeContext";
 
-const SECTIONS = [
+const HOME_SECTIONS = [
   {
-    label: "Ben.",
-    body: "I go by Commander Zen. You probably haven't heard of me but that's the point. This is just an EDH passion project schlepped together by a guy with a bit of professional knowledge, a very specific personal obsession, and the demeanor of Mister Rodgers raised on Run the Jewels. This will always be free and available and the best I can make it.",
+    label: "Zen.",
+    body: "I'm a guy with a philosophy degree and the demeanor of Mister Rodgers raised on Run the Jewels. I love schleppin shit together and promise you this will always be free & available & the best I can make it.",
   },
   {
-    label: "MTG DNA.",
-    body: "This intends to be the source of truth and connective tissue in terms of digital tooling for the EDH player. Current state, the tools in the EDH ecosystem are like loose draft chaff in your LGS bag. Nothing connects them. MTG DNA aims to bridge that gap.",
+    label: "The problem.",
+    body: "Dope EDH tools exist, but none of them \"talk\" to each other.",
   },
   {
-    label: "Always.",
-    body: "Everyone has their own custom solution for how to track what they're up to at any given moment in regards to their commander career. MTG DNA intends to unify and standardize that process to ensure the EDH player has the best available option at any point in the lifecycle of your favorite legend in the zone from cradle to grave.",
+    label: "What that means.",
+    body: "You make the brutal decision to swap the hot new tech for a trusted card in your 99 and the result is... unsure. When you cut a card and your win rate moves, you need both events in sequence to learn anything.",
   },
   {
-    label: "Mobile.",
-    body: "Love Scryfall but that's a bitch on mobile and a smartphone or similar device is the default option for users today. The one shortcoming IMO of the S tier options are mobile compatibility, with the exception of ManaBox.",
+    label: "Mobile first.",
+    body: "S tier tools for the EDH player were built with a monitor and keyboard in mind. MTG DNA is here for the late night gremlin scrolling cards in bed (before their phone inevitably falls on their face.)",
   },
   {
-    label: "Fun.",
-    body: "I consider myself an illiterate technologist in the sense that I am not able to code anything, yet I have an understanding of every other aspect of the SDLC. Claude Code has enabled me to realize projects that before were just concepts. I believe in ethical LLM usage, with a human in the loop always. If you wish to confirm or correct my understanding, please feel free to reach out. I would appreciate the discussion.",
+    label: "How this was built.",
+    body: "I consider myself an illiterate technologist, in the sense that despite knowing almost every phase of the SDLC, my coding expertise is limited to a python \"Hello World\" statement or a rudimentary understanding of an elif statement. Claude Code has enabled me to realize projects that before were just concepts. I believe in ethical LLM usage, with a human in the loop always. If you wish to confirm or correct my understanding, please feel free to reach out. I always love a good yap!",
   },
 ];
 
@@ -43,8 +43,8 @@ export default function Home() {
         flexDirection: "column",
         gap: 0,
       }}>
-        {SECTIONS.map((section, i) => (
-          <div key={i} style={{ marginBottom: i < SECTIONS.length - 1 ? 32 : 0 }}>
+        {HOME_SECTIONS.map((section, i) => (
+          <div key={i} style={{ marginBottom: i < HOME_SECTIONS.length - 1 ? 32 : 0 }}>
             <div style={{
               fontFamily: "'Zilla Slab', serif",
               fontSize: 28,

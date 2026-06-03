@@ -4,6 +4,7 @@ import NavBar from "./components/NavBar";
 import Home from "./pages/Home";
 import Vault from "./pages/Vault";
 import Brew from "./pages/Brew";
+import Table from "./pages/Table";
 
 const PAGES = ["home", "vault", "brew", "table", "notebook"];
 
@@ -39,7 +40,8 @@ export default function App() {
         {activePage === "home"  && <Home />}
         {activePage === "vault" && <Vault />}
         {activePage === "brew"  && <Brew />}
-        {activePage !== "home" && activePage !== "vault" && activePage !== "brew" && (
+        {activePage === "table" && <Table />}
+        {activePage !== "home" && activePage !== "vault" && activePage !== "brew" && activePage !== "table" && (
           <div style={{
             display: "flex",
             alignItems: "center",

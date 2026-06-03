@@ -5,6 +5,16 @@ export const TOOLS = [
   { tier: "B", name: "Archidekt",          url: "https://archidekt.com",         desc: "Collection tracking built into the deck builder." },
 ];
 
+export const PLAY_LIFE_TOOLS = [
+  { tier: "S", name: "Lotus",        url: "https://lifecounter.app",       desc: "Cleanest life counter. No ads. Commander damage, all counter types, game timer." },
+  { tier: "A", name: "Playgroup.gg", url: "https://playgroup.gg",          desc: "ELO tracking, device-synced logging, Playscore system. 4.9★." },
+];
+
+export const PLAY_POD_TOOLS = [
+  { tier: "A", name: "ScryCheck",       url: "https://scrycheck.com",          desc: "Power level scoring. The gold standard for bracket assignment." },
+  { tier: "B", name: "EDH Power Level", url: "https://mtg-deck-comparator.com", desc: "Pod Balance Checker. Paste all four lists, get balance read." },
+];
+
 export const BREW_TOOLS = [
   { tier: "S", name: "Moxfield",           url: "https://moxfield.com",          desc: "The de facto standard. Apple-polished deck storage and sharing." },
   { tier: "S", name: "Archidekt",          url: "https://archidekt.com",         desc: "More control, more customization. Flexible and powerful." },

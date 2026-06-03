@@ -7,10 +7,14 @@ const FONTS_HREF =
 
 const ThemeContext = createContext(null);
 
+function getInitialMode() {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export function ThemeProvider({ children }) {
-  const [mode, setMode] = useState(
-    () => localStorage.getItem(STORAGE_KEY) || "light"
-  );
+  const [mode, setMode] = useState(getInitialMode);
 
   useEffect(() => {
     if (document.querySelector(`link[href="${FONTS_HREF}"]`)) return;
@@ -23,6 +27,18 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, mode);
   }, [mode]);
+
+  // Follow system preference only when user has no stored override
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => {
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        setMode(e.matches ? "dark" : "light");
+      }
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const toggleTheme = () => setMode(m => (m === "light" ? "dark" : "light"));
 

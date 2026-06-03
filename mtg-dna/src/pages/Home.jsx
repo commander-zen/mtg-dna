@@ -24,11 +24,10 @@ const SECTIONS = [
 ];
 
 export default function Home() {
-  const { theme, mode } = useTheme();
-
-  const labelColor = mode === "light" ? theme.ink   : theme.white;
-  const mutedColor = mode === "light" ? `${theme.ink}b3` : `${theme.white}99`;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
+  const { theme, mode, toggleTheme } = useTheme();
+  const labelColor  = mode === "light" ? theme.ink        : theme.white;
+  const mutedColor  = mode === "light" ? `${theme.ink}b3` : `${theme.white}99`;
+  const borderColor = mode === "light" ? theme.border      : theme.muted;
 
   return (
     <div style={{
@@ -73,7 +72,9 @@ export default function Home() {
           marginTop: 40,
           paddingTop: 20,
           borderTop: `1px solid ${borderColor}`,
-          textAlign: "center",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}>
           <a
             href="https://bsky.app/profile/commanderzen.bsky.social"
@@ -89,6 +90,30 @@ export default function Home() {
           >
             @commanderzen.bsky.social
           </a>
+          <button
+            onClick={toggleTheme}
+            style={{
+              background: "none",
+              border: "none",
+              borderRadius: 0,
+              padding: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <span
+              className="material-symbols-rounded"
+              style={{
+                fontSize: 18,
+                color: mutedColor,
+                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+              }}
+            >
+              {mode === "dark" ? "light_mode" : "dark_mode"}
+            </span>
+          </button>
         </div>
       </div>
     </div>

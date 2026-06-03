@@ -1,6 +1,31 @@
-import { C, TIER_COLORS, TIERS } from "../constants";
+import { useTheme } from "../theme/ThemeContext";
+
+const TIERS = ["S", "A", "B"];
+
+const TIER_COLORS = {
+  light: {
+    S: { badgeBg: "#c8960c", badgeText: "#faf7f2" },
+    A: { badgeBg: "#1a1410", badgeText: "#faf7f2" },
+    B: { badgeBg: "#c0392b", badgeText: "#faf7f2" },
+  },
+  dark: {
+    S: { badgeBg: "#e8a020", badgeText: "#0a0e1a" },
+    A: { badgeBg: "#7ab89a", badgeText: "#0a0e1a" },
+    B: { badgeBg: "#3a4a5a", badgeText: "#e8f0ee" },
+  },
+};
 
 export default function ToolChips({ tools }) {
+  const { theme, mode } = useTheme();
+
+  const cardBg     = mode === "light" ? theme.paper   : theme.surface;
+  const cardBorder = mode === "light" ? theme.border   : theme.muted;
+  const nameColor  = mode === "light" ? theme.ink      : theme.white;
+  const descColor  = mode === "light" ? `${theme.ink}99` : `${theme.white}80`;
+  const tierLabel  = mode === "light" ? `${theme.ink}99` : `${theme.white}80`;
+
+  const tierColors = TIER_COLORS[mode];
+
   const grouped = TIERS.reduce((acc, t) => {
     acc[t] = tools.filter(tool => tool.tier === t);
     return acc;
@@ -9,19 +34,14 @@ export default function ToolChips({ tools }) {
   return (
     <>
       {TIERS.filter(t => grouped[t].length > 0).map(tier => {
-        const tc = TIER_COLORS[tier];
+        const tc = tierColors[tier];
         return (
           <div key={tier} style={{ marginBottom: 20 }}>
             <div style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: tc.badge,
-              marginBottom: 10,
               display: "flex",
               alignItems: "center",
               gap: 8,
+              marginBottom: 10,
             }}>
               <span style={{
                 display: "inline-flex",
@@ -29,15 +49,26 @@ export default function ToolChips({ tools }) {
                 justifyContent: "center",
                 width: 20,
                 height: 20,
-                borderRadius: 6,
-                background: tc.bg,
-                border: `1px solid ${tc.border}`,
+                background: tc.badgeBg,
+                color: tc.badgeText,
                 fontSize: 11,
                 fontWeight: 800,
-                color: tc.badge,
-              }}>{tier}</span>
-              Tier
+                fontFamily: "'Noto Sans', sans-serif",
+              }}>
+                {tier}
+              </span>
+              <span style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: tierLabel,
+              }}>
+                Tier
+              </span>
             </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {grouped[tier].map(tool => (
                 <a
@@ -50,9 +81,9 @@ export default function ToolChips({ tools }) {
                     alignItems: "center",
                     gap: 12,
                     padding: "14px 16px",
-                    borderRadius: 14,
-                    background: tc.bg,
-                    border: `1px solid ${tc.border}`,
+                    background: cardBg,
+                    border: `1px solid ${cardBorder}`,
+                    borderRadius: 0,
                     textDecoration: "none",
                     cursor: "pointer",
                     WebkitTapHighlightColor: "transparent",
@@ -65,35 +96,48 @@ export default function ToolChips({ tools }) {
                     justifyContent: "center",
                     width: 28,
                     height: 28,
-                    borderRadius: 8,
-                    background: `${tc.badge}22`,
-                    border: `1px solid ${tc.badge}55`,
+                    background: tc.badgeBg,
+                    color: tc.badgeText,
                     fontSize: 12,
                     fontWeight: 800,
-                    color: tc.badge,
-                    letterSpacing: 0,
-                  }}>{tool.tier}</span>
+                    fontFamily: "'Noto Sans', sans-serif",
+                  }}>
+                    {tier}
+                  </span>
+
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 15,
-                      fontWeight: 600,
-                      color: tc.text,
+                      fontFamily: "'Noto Sans', sans-serif",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: nameColor,
                       lineHeight: 1.2,
                       marginBottom: 3,
-                    }}>{tool.name}</div>
+                    }}>
+                      {tool.name}
+                    </div>
                     <div style={{
+                      fontFamily: "'Noto Sans', sans-serif",
                       fontSize: 12,
-                      color: C.muted,
+                      fontWeight: 400,
+                      color: descColor,
                       lineHeight: 1.5,
-                    }}>{tool.desc}</div>
+                    }}>
+                      {tool.desc}
+                    </div>
                   </div>
-                  <span className="material-symbols-rounded" style={{
-                    flexShrink: 0,
-                    fontSize: 18,
-                    fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-                    color: tc.badge,
-                    opacity: 0.7,
-                  }}>open_in_new</span>
+
+                  <span
+                    className="material-symbols-rounded"
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 18,
+                      fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+                      color: descColor,
+                    }}
+                  >
+                    open_in_new
+                  </span>
                 </a>
               ))}
             </div>

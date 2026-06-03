@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "./theme/ThemeContext";
 import NavBar from "./components/NavBar";
 import Home from "./pages/Home";
+import Vault from "./pages/Vault";
 
 const PAGES = ["home", "vault", "brew", "table", "notebook"];
 
@@ -34,8 +35,9 @@ export default function App() {
         overflow: "hidden",
         paddingBottom: NAV_HEIGHT,
       }}>
-        {activePage === "home" && <Home />}
-        {activePage !== "home" && (
+        {activePage === "home"  && <Home />}
+        {activePage === "vault" && <Vault />}
+        {activePage !== "home" && activePage !== "vault" && (
           <div style={{
             display: "flex",
             alignItems: "center",

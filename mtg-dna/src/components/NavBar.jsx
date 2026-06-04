@@ -3,10 +3,10 @@ import { useTheme } from "../theme/ThemeContext";
 
 const TABS = [
   { id: "home",     label: "Home",     icon: "home"        },
-  { id: "vault",    label: "Vault",    icon: "style"       },
+  { id: "vault",    label: "Vault",    icon: "encrypted"   },
   { id: "brew",     label: "Brew",     icon: "science"     },
-  { id: "table",    label: "Table",    icon: "table"       },
-  { id: "notebook", label: "Notebook", icon: "menu_book"   },
+  { id: "table",    label: "Table",    icon: "dining"      },
+  { id: "notebook", label: "Analysis", icon: "menu_book"   },
 ];
 
 export default function NavBar({ activePage, onNavigate }) {

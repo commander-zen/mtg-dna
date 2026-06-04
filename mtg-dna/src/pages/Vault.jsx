@@ -1,5 +1,6 @@
 import { useTheme } from "../theme/ThemeContext";
 import ToolChips from "../components/ToolChips";
+import PageHeader from "../components/PageHeader";
 import { TOOLS } from "../data/tools";
 
 export default function Vault() {
@@ -18,6 +19,7 @@ export default function Vault() {
       WebkitOverflowScrolling: "touch",
     }}>
       <div style={{ padding: "28px 20px 40px" }}>
+        <PageHeader title="VAULT" />
         <p style={{
           fontFamily: "'Noto Sans', sans-serif",
           fontSize: 13,

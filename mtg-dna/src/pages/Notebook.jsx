@@ -1,6 +1,7 @@
 import { useTheme } from "../theme/ThemeContext";
 import ToolChips from "../components/ToolChips";
 import SectionHeader from "../components/SectionHeader";
+import PageHeader from "../components/PageHeader";
 import { ANALYZE_TOOLS } from "../data/tools";
 
 const GAP_ACCENT = "#ef4444";
@@ -19,6 +20,7 @@ export default function Notebook() {
       WebkitOverflowScrolling: "touch",
     }}>
       <div style={{ padding: "28px 20px 40px" }}>
+        <PageHeader title="THE GAP" />
         <div style={{ marginBottom: 28 }}>
           <SectionHeader label="Analysis Tools" />
           <ToolChips tools={ANALYZE_TOOLS} />

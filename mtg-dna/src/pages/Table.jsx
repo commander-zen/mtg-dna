@@ -2,6 +2,7 @@ import { useTheme } from "../theme/ThemeContext";
 import ToolChips from "../components/ToolChips";
 import SectionHeader from "../components/SectionHeader";
 import TeaserCard from "../components/TeaserCard";
+import PageHeader from "../components/PageHeader";
 import { PLAY_LIFE_TOOLS, PLAY_POD_TOOLS } from "../data/tools";
 
 export default function Table() {
@@ -16,6 +17,7 @@ export default function Table() {
       WebkitOverflowScrolling: "touch",
     }}>
       <div style={{ padding: "28px 20px 40px" }}>
+        <PageHeader title="POD CHECK" />
         <div style={{ marginBottom: 28 }}>
           <SectionHeader label="Life Trackers" />
           <ToolChips tools={PLAY_LIFE_TOOLS} />

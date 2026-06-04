@@ -2,10 +2,6 @@ import { useTheme } from "../theme/ThemeContext";
 
 const HOME_SECTIONS = [
   {
-    label: "Zen.",
-    body: "I'm a guy with a philosophy degree and the demeanor of Mister Rodgers raised on Run the Jewels. I love schleppin shit together and promise you this will always be free & available & the best I can make it.",
-  },
-  {
     label: "The problem.",
     body: "Dope EDH tools exist, but none of them \"talk\" to each other.",
   },
@@ -15,11 +11,15 @@ const HOME_SECTIONS = [
   },
   {
     label: "Mobile first.",
-    body: "S tier tools for the EDH player were built with a monitor and keyboard in mind. MTG DNA is here for the late night gremlin scrolling cards in bed (before their phone inevitably falls on their face.)",
+    body: "Our favorite EDH tools were built with a monitor and keyboard in mind. MTG DNA is here for the late night gremlin scrolling cards in bed (before their phone inevitably falls on their face).",
+  },
+  {
+    label: "Zen.",
+    body: "MTG DNA is an attempt to bring harmony to the lifecycle of your legend. It's the brainchild of a guy named Ben with a philosophy degree, a tech job and the demeanor of Mister Rodgers raised on Run the Jewels (ergo the online persona of Zen). I love schleppin shit together and promise you this will always be free & available & the best I can make it. To prove that promise I can only off you my word, but word is bond.",
   },
   {
     label: "How this was built.",
-    body: "I consider myself an illiterate technologist, in the sense that despite knowing almost every phase of the SDLC, my coding expertise is limited to a python \"Hello World\" statement or a rudimentary understanding of an elif statement. Claude Code has enabled me to realize projects that before were just concepts. I believe in ethical LLM usage, with a human in the loop always. If you wish to confirm or correct my understanding, please feel free to reach out. I always love a good yap!",
+    body: "I consider myself an illiterate humane technologist, as my thwomp sized blocker to side projects has always been that despite knowing almost every phase of the SDLC, my coding expertise is limited to a python \"Hello World\" statement or a rudimentary understanding of an elif statement. Claude Code has enabled me to realize projects that before were just concepts. I believe in ethical LLM usage, with a human in the loop always. If you want to discuss (anything really) please feel free to reach out. I always love a good yap!",
   },
 ];
 

@@ -42,7 +42,7 @@ export default function Brew() {
 
         {/* Section A — Deck Stack teaser */}
         <div style={{ marginBottom: 36 }}>
-          <PageHeader title="DECK STACK" />
+          <PageHeader eyebrow="Helix" title="brew" />
           <TeaserCard
             accent="#4ade80"
             name="Deck Stack"

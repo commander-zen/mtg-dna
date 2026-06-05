@@ -1,4 +1,5 @@
 import { useTheme } from "../theme/ThemeContext";
+import PageHeader from "../components/PageHeader";
 
 const HOME_SECTIONS = [
   {
@@ -25,7 +26,6 @@ const HOME_SECTIONS = [
 
 export default function Home() {
   const { theme, mode, toggleTheme } = useTheme();
-  const labelColor  = mode === "light" ? theme.ink        : theme.white;
   const mutedColor  = mode === "light" ? `${theme.ink}b3` : `${theme.white}99`;
   const borderColor = mode === "light" ? theme.border      : theme.muted;
 
@@ -43,24 +43,25 @@ export default function Home() {
         flexDirection: "column",
         gap: 0,
       }}>
+        <PageHeader title="the helix" />
         {HOME_SECTIONS.map((section, i) => (
           <div key={i} style={{ marginBottom: i < HOME_SECTIONS.length - 1 ? 32 : 0 }}>
             <div style={{
-              fontFamily: "'Zilla Slab', serif",
-              fontSize: 28,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.2,
-              color: labelColor,
+              fontFamily: "'Noto Sans', sans-serif",
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: mode === "light" ? theme.muted : theme.dim,
             }}>
               {section.label}
             </div>
             <div style={{
               fontFamily: "'Noto Sans', sans-serif",
-              fontSize: 14,
-              fontWeight: 400,
+              fontSize: 16,
+              fontWeight: 300,
               lineHeight: 1.7,
-              marginTop: 6,
+              marginTop: 8,
               color: mutedColor,
             }}>
               {section.body}

@@ -17,7 +17,7 @@ export default function Table() {
       WebkitOverflowScrolling: "touch",
     }}>
       <div style={{ padding: "28px 20px 40px" }}>
-        <PageHeader title="POD CHECK" />
+        <PageHeader eyebrow="Helix" title="pod" />
         <div style={{ marginBottom: 28 }}>
           <SectionHeader label="Life Trackers" />
           <ToolChips tools={PLAY_LIFE_TOOLS} />

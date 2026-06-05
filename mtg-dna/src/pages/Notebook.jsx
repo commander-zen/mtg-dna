@@ -20,7 +20,7 @@ export default function Notebook() {
       WebkitOverflowScrolling: "touch",
     }}>
       <div style={{ padding: "28px 20px 40px" }}>
-        <PageHeader title="THE GAP" />
+        <PageHeader eyebrow="Helix" title="analysis" />
         <div style={{ marginBottom: 28 }}>
           <SectionHeader label="Analysis Tools" />
           <ToolChips tools={ANALYZE_TOOLS} />

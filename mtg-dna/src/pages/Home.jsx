@@ -43,7 +43,7 @@ export default function Home() {
         flexDirection: "column",
         gap: 0,
       }}>
-        <PageHeader title="the helix" />
+        <PageHeader eyebrow="MTG DNA" title="the helix" />
         {HOME_SECTIONS.map((section, i) => (
           <div key={i} style={{ marginBottom: i < HOME_SECTIONS.length - 1 ? 32 : 0 }}>
             <div style={{

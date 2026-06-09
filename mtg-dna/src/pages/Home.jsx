@@ -37,12 +37,7 @@ export default function Home() {
       background: theme.base,
       WebkitOverflowScrolling: "touch",
     }}>
-      <div style={{
-        padding: "0 20px 40px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-      }}>
+      <div style={{ padding: "28px 20px 40px" }}>
         <PageHeader eyebrow="MTG DNA" title="the helix" />
         {HOME_SECTIONS.map((section, i) => (
           <div key={i} style={{ marginBottom: i < HOME_SECTIONS.length - 1 ? 32 : 0 }}>

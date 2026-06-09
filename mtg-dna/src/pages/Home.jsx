@@ -4,7 +4,7 @@ import PageHeader from "../components/PageHeader";
 const HOME_SECTIONS = [
   {
     label: "The problem.",
-    body: "High quality EDH tools exist, but they all exist in isolation.",
+    body: "EDH tools exist, but they all exist in isolation.",
   },
   {
     label: "What that means.",

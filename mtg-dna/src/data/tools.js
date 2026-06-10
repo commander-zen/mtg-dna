@@ -24,7 +24,8 @@ export const PLAY_POD_TOOLS = [
 ];
 
 export const BREW_TOOLS = [
-  { name: "Helix: Brew", desc: "MTG DNA's solution. Search, swipe, and build your pile." },
+  // action is resolved to a live onClick handler by the page that owns the state
+  { name: "Helix: Brew", desc: "MTG DNA's solution. Search, swipe, and build your pile.", action: "brew-search" },
   { tier: "S", name: "Moxfield",           url: "https://moxfield.com",          desc: "The de facto standard. Apple-polished deck storage and sharing." },
   { tier: "S", name: "Archidekt",          url: "https://archidekt.com",         desc: "More control, more customization. Flexible and powerful." },
   { tier: "A", name: "Commander Template", url: "https://commandertemplate.com", desc: "Math-based recs, community hub, foil shimmer UI." },

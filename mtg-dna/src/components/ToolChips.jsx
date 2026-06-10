@@ -38,8 +38,9 @@ export default function ToolChips({ tools }) {
     <a
       key={tool.name}
       href={tool.url}
-      target="_blank"
-      rel="noopener noreferrer"
+      target={tool.url ? "_blank" : undefined}
+      rel={tool.url ? "noopener noreferrer" : undefined}
+      onClick={tool.onClick}
       style={{
         display: "flex",
         alignItems: "center",
@@ -47,6 +48,7 @@ export default function ToolChips({ tools }) {
         padding: "14px 0",
         borderBottom: i < list.length - 1 ? `1px solid ${divider}` : "none",
         textDecoration: "none",
+        cursor: tool.onClick ? "pointer" : undefined,
         WebkitTapHighlightColor: "transparent",
       }}
     >

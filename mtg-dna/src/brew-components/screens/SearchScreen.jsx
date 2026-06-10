@@ -113,41 +113,6 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
         minHeight: `calc(100dvh - ${NAV_HEIGHT}px - env(safe-area-inset-bottom))`,
       }}>
 
-        {/* ── Title ── */}
-        <div style={{ padding: "48px 0 12px" }}>
-          <div style={{
-            fontFamily: "'Noto Sans', sans-serif",
-            fontSize: 48, lineHeight: 1,
-            letterSpacing: "0.04em",
-            color: "var(--text)",
-          }}>
-            DECK STACK
-          </div>
-        </div>
-
-        {/* ── Tagline ── */}
-        <div style={{
-          fontFamily: "'Noto Sans', sans-serif",
-          fontSize: 20,
-          fontWeight: 600,
-          color: "var(--text)",
-          marginBottom: 10,
-          lineHeight: 1.3,
-        }}>
-          Search. Swipe. Brew.
-        </div>
-
-        {/* ── Description ── */}
-        <div style={{
-          fontFamily: "'Noto Sans', sans-serif",
-          fontSize: 13,
-          color: "var(--muted)",
-          marginBottom: 0,
-          lineHeight: 1.5,
-        }}>
-          Deck Stack uses Scryfall syntax to stack and swipe cards for your commander pile.
-        </div>
-
         {/* ── Spacer ── */}
         <div style={{ flex: 1 }} />
 
@@ -219,38 +184,6 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
             SEARCH
           </span>
         </button>
-
-        {/* ── Swipe hint ── */}
-        <div style={{
-          textAlign: "center",
-          fontSize: 12, color: "var(--muted)",
-          marginTop: 10,
-          marginBottom: 8,
-        }}>
-          ← swipe left to yeet &nbsp;·&nbsp; swipe right to keep →
-        </div>
-
-        {/* ── Easter egg footer — sits just below the fold ── */}
-        <div style={{
-          display: "flex", justifyContent: "center", gap: 20,
-          paddingBottom: 28,
-          paddingTop: 12,
-        }}>
-          <a
-            href="https://bsky.app/profile/commanderzen.bsky.social"
-            target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: "rgba(255,255,255,0.18)", textDecoration: "none" }}
-          >
-            reach out @commanderzen
-          </a>
-          <a
-            href="https://github.com/commander-zen/deck-stack/issues/new?labels=bug&template=bug_report.md"
-            target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: "rgba(255,255,255,0.18)", textDecoration: "none" }}
-          >
-            Report a Bug
-          </a>
-        </div>
 
       </div>
     </div>

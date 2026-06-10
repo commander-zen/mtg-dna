@@ -9,59 +9,154 @@ import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe } from "../lib/scryfall.js";
 import { supabase } from "../lib/supabase.js";
 
+// Brew sub-screens are always dark, regardless of the app theme mode —
+// card art is designed against dark and the light tokens were leaking in.
+const BREW = {
+  base:    "#0a0e1a",
+  surface: "#111820",
+  text:    "#e8f0ee",
+  dim:     "#4a6358",
+  amber:   "#e8a020",
+  green:   "#7ab89a",
+  red:     "#a04040",
+  border:  "#1a2520",
+};
+
 // The brew-components were ported from Deck Stack, whose styles reference
 // CSS custom properties (--bg, --color-surface, --bevel-*, etc.) in
 // module-level style objects that can't call useTheme(). This bridge maps
-// every Deck Stack variable onto MTG DNA theme tokens at the takeover root,
-// so the ported components re-theme (including light/dark) without per-file
-// style rewrites. Theme keys differ by mode, hence the || fallbacks.
-function brewThemeVars(theme) {
-  const panel = theme.surface || theme.paper;
-  const text = theme.white || theme.ink;
-  const muted = theme.dim || theme.muted;
-  const accent = theme.amber || theme.gold;
-  const success = theme.green || theme.gold;
-  const danger = theme.stamp || "#c0392b";
-  return {
-    "--bg": theme.base,
-    "--panel": panel,
-    "--panel2": panel,
-    "--text": text,
-    "--text2": muted,
-    "--muted": muted,
-    "--primary": accent,
-    "--secondary": success,
-    "--success": success,
-    "--danger": danger,
-    "--active": accent,
-    "--color-bg": theme.base,
-    "--color-surface": panel,
-    "--color-surface-raised": panel,
-    "--color-chrome": panel,
-    "--color-chrome-light": theme.border,
-    "--color-chrome-mid": muted,
-    "--color-chrome-dark": theme.border,
-    "--color-titlebar": accent,
-    "--color-titlebar-text": theme.base,
-    "--color-text-primary": text,
-    "--color-text-secondary": muted,
-    "--color-text-chrome": text,
-    "--bevel-light": theme.border,
-    "--bevel-dark": theme.border,
-    "--bevel-inset-light": theme.border,
-    "--bevel-inset-dark": theme.border,
-    "--font-system": "'Noto Sans', sans-serif",
-    "--font-size-base": "13px",
-    "--font-size-sm": "11px",
-    "--font-size-lg": "16px",
-    "--font-size-xl": "20px",
-    "--space-1": "4px",
-    "--space-2": "8px",
-    "--space-3": "12px",
-    "--space-4": "16px",
-    "--space-5": "24px",
-    "--space-6": "32px",
-  };
+// every Deck Stack variable onto the fixed Brew dark palette at the
+// takeover root, so the ported components stay dark without per-file edits.
+const BREW_VARS = {
+  "--bg": BREW.base,
+  "--panel": BREW.surface,
+  "--panel2": BREW.surface,
+  "--text": BREW.text,
+  "--text2": BREW.dim,
+  "--muted": BREW.dim,
+  "--primary": BREW.amber,
+  "--secondary": BREW.green,
+  "--success": BREW.green,
+  "--danger": BREW.red,
+  "--active": BREW.amber,
+  "--color-bg": BREW.base,
+  "--color-surface": BREW.surface,
+  "--color-surface-raised": BREW.surface,
+  "--color-chrome": BREW.surface,
+  "--color-chrome-light": BREW.border,
+  "--color-chrome-mid": BREW.dim,
+  "--color-chrome-dark": BREW.border,
+  "--color-titlebar": BREW.amber,
+  "--color-titlebar-text": BREW.base,
+  "--color-text-primary": BREW.text,
+  "--color-text-secondary": BREW.dim,
+  "--color-text-chrome": BREW.text,
+  "--bevel-light": BREW.border,
+  "--bevel-dark": BREW.border,
+  "--bevel-inset-light": BREW.border,
+  "--bevel-inset-dark": BREW.border,
+  "--font-system": "'Noto Sans', sans-serif",
+  "--font-size-base": "13px",
+  "--font-size-sm": "11px",
+  "--font-size-lg": "16px",
+  "--font-size-xl": "20px",
+  "--space-1": "4px",
+  "--space-2": "8px",
+  "--space-3": "12px",
+  "--space-4": "16px",
+  "--space-5": "24px",
+  "--space-6": "32px",
+};
+
+const BREW_MODES = [
+  { key: "legend",    name: "New Legend",     desc: "Start fresh around a commander" },
+  { key: "import",    name: "Import Deck",    desc: "Bring in a Moxfield or Archidekt URL" },
+  { key: "pile",      name: "Free Pile",      desc: "No commander, just building a stack" },
+  { key: "discovery", name: "Card Discovery", desc: "Browse and swipe without a goal" },
+];
+
+// PageHeader pattern on the fixed dark palette. The shared component reads
+// useTheme(), which would follow the app's light mode in here.
+function BrewModeSelect({ onSelect }) {
+  return (
+    <div style={{ padding: "28px 20px 40px", maxWidth: 430, margin: "0 auto" }}>
+      <div style={{ marginBottom: 32 }}>
+        <div style={{
+          fontFamily: "'Noto Sans', sans-serif",
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: BREW.dim,
+          marginBottom: 4,
+        }}>
+          Helix
+        </div>
+        <div style={{
+          fontFamily: "'Noto Sans', sans-serif",
+          fontSize: 28,
+          fontWeight: 300,
+          letterSpacing: "0.02em",
+          color: BREW.text,
+          lineHeight: 1.1,
+        }}>
+          brew
+        </div>
+        <div style={{ width: 32, height: 1, background: BREW.amber, marginTop: 10 }} />
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {BREW_MODES.map((m, i) => (
+          <div
+            key={m.key}
+            onClick={() => onSelect(m.key)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "14px 0",
+              borderBottom: i < BREW_MODES.length - 1 ? `1px solid ${BREW.border}` : "none",
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 15,
+                fontWeight: 400,
+                color: BREW.text,
+                lineHeight: 1.2,
+                marginBottom: 3,
+              }}>
+                {m.name}
+              </div>
+              <div style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 12,
+                fontWeight: 300,
+                color: `${BREW.text}60`,
+                lineHeight: 1.5,
+              }}>
+                {m.desc}
+              </div>
+            </div>
+            <span
+              className="material-symbols-rounded"
+              style={{
+                flexShrink: 0,
+                fontSize: 16,
+                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+                color: BREW.dim,
+              }}
+            >
+              arrow_forward
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // Collapse instances to (card_name, section) rows with quantities for deck_cards.
@@ -79,8 +174,9 @@ function buildCardRows(deckId, boards) {
 
 export default function Brew() {
   const { theme } = useTheme();
-  // shell | search | swipe | review
+  // shell | modes | search | swipe | review
   const [brewView, setBrewView] = useState("shell");
+  const [brewMode, setBrewMode] = useState(null);
 
   const [query, setQuery]           = useState("");
   const [swipeCards, setSwipeCards] = useState([]);
@@ -97,6 +193,7 @@ export default function Brew() {
   const [saveError, setSaveError] = useState(null);
 
   function resetBrew() {
+    setBrewMode(null);
     setQuery("");
     setSwipeCards([]);
     setSwipeIndex(0);
@@ -178,11 +275,12 @@ export default function Brew() {
   // tools.js is static data, so the Helix: Brew entry carries an action key
   // and the live handler is injected here.
   const tools = BREW_TOOLS.map(t =>
-    t.action === "brew-search" ? { ...t, onClick: () => setBrewView("search") } : t
+    t.action === "brew-search" ? { ...t, onClick: () => setBrewView("modes") } : t
   );
 
   if (brewView !== "shell") {
-    const backTarget = brewView === "search" ? "shell"
+    const backTarget = brewView === "modes" ? "shell"
+      : brewView === "search" ? "modes"
       : brewView === "swipe" ? "search"
       : "swipe";
     // Swipe view: the stack strip owns the top edge, so the exit moves bottom-left.
@@ -195,10 +293,10 @@ export default function Brew() {
         position: "fixed",
         inset: 0,
         zIndex: 50,
-        background: theme.base,
+        background: BREW.base,
         overflowY: "auto",
         WebkitOverflowScrolling: "touch",
-        ...brewThemeVars(theme),
+        ...BREW_VARS,
       }}>
         <button
           onClick={() => setBrewView(backTarget)}
@@ -215,7 +313,7 @@ export default function Brew() {
             background: "transparent",
             border: "none",
             padding: 0,
-            color: theme.white || theme.ink,
+            color: BREW.text,
             cursor: "pointer",
             WebkitTapHighlightColor: "transparent",
           }}
@@ -230,6 +328,15 @@ export default function Brew() {
             arrow_back
           </span>
         </button>
+
+        {brewView === "modes" && (
+          <BrewModeSelect
+            onSelect={(key) => {
+              setBrewMode(key);
+              setBrewView("search");
+            }}
+          />
+        )}
 
         {brewView === "search" && (
           <SearchScreen

@@ -3,14 +3,12 @@ import { getCardImage } from "../../lib/scryfall.js";
 import { getSettings } from "../../lib/settings.js";
 import { useDoubleTap } from "../../hooks/useDoubleTap.js";
 import { useGameChangers } from "../../hooks/useGameChangers.js";
-const NAV_HEIGHT = 60;
 
 const isBasicLand = c => Boolean(c?.type_line?.includes("Basic Land"));
 const isAnyNumber = c => Boolean(c?.oracle_text?.includes("A deck can have any number of cards named"));
 const isStackable  = c => isBasicLand(c) || isAnyNumber(c);
 
 const SWIPE_THRESHOLD = 80;
-const TIP_KEY = "helixbrew_swipe_hint_shown";
 
 const SORT_OPTIONS = [
   { value: "name",   label: "NAME" },
@@ -55,7 +53,6 @@ export default function SwipeScreen({
   const [animOut,      setAnimOut]      = useState(null);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [imgError,     setImgError]     = useState(false);
-  const [showTip,      setShowTip]      = useState(false);
   const [cardExpanded, setCardExpanded] = useState(false);
   const [flipped,      setFlipped]      = useState(false);
 
@@ -98,10 +95,6 @@ export default function SwipeScreen({
   }, [idx, effectiveCards]);
 
   useEffect(() => {
-    if (!localStorage.getItem(TIP_KEY)) setShowTip(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (!didMountRef.current) { didMountRef.current = true; return; }
     onIndexChange?.(idx);
   }, [idx]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -130,7 +123,6 @@ export default function SwipeScreen({
 
   function doResolve(keep) {
     if (!card || animOut || done) return;
-    dismissTipForever();
     setAnimOut(keep ? "right" : "left");
     haptic(keep ? 12 : 6);
     setTimeout(() => {
@@ -153,7 +145,6 @@ export default function SwipeScreen({
   // Swipe down — maybe board
   function doMaybe() {
     if (!card || animOut || done) return;
-    dismissTipForever();
     setAnimOut("down");
     haptic(8);
     setTimeout(() => {
@@ -168,7 +159,6 @@ export default function SwipeScreen({
   // Swipe up — straight to the decklist
   function doDecklist() {
     if (!card || animOut || done) return;
-    dismissTipForever();
     setAnimOut("up");
     haptic(14);
     setTimeout(() => {
@@ -193,11 +183,6 @@ export default function SwipeScreen({
     }
     setIdx(i => Math.max(0, i - 1));
     haptic([4, 20, 4]);
-  }
-
-  function dismissTipForever() {
-    localStorage.setItem(TIP_KEY, "1");
-    setShowTip(false);
   }
 
   // ── Pointer events ───────────────────────────────────────────────────────────
@@ -254,17 +239,13 @@ export default function SwipeScreen({
     : getCardImage(card, "large") ?? getCardImage(card, "normal")
   ) : null;
 
-  // Rotation: capped at ±15deg during drag; ±30deg on fly-out
-  const rotation = animOut === "right" ? 30
-    : animOut === "left" ? -30
-    : Math.max(-15, Math.min(15, offset * 0.08));
-
+  // Flat carousel motion — no rotation, the card's movement is the feedback.
   const artTransform =
       animOut === "up"    ? "translateY(-110vh)"
     : animOut === "down"  ? "translateY(110vh)"
-    : animOut === "right" ? `translateX(110vw) rotate(30deg)`
-    : animOut === "left"  ? `translateX(-110vw) rotate(-30deg)`
-    : `translate(${offset}px, ${offsetY}px) rotate(${rotation}deg)`;
+    : animOut === "right" ? "translateX(110vw)"
+    : animOut === "left"  ? "translateX(-110vw)"
+    : `translate(${offset}px, ${offsetY}px)`;
 
   const artOpacity = animOut ? 0 : 1;
 
@@ -273,15 +254,6 @@ export default function SwipeScreen({
     : dragging
       ? "none"
       : "transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)";
-
-  // Colored tint overlay: 0 until |drag|>20, maxes at 0.35 at threshold (80px).
-  // Dominant axis picks the color: green/red horizontal, blue/amber vertical.
-  const verticalDrag = Math.abs(offsetY) > Math.abs(offset);
-  const driveOffset  = verticalDrag ? offsetY : offset;
-  const tintOpacity = Math.min(1, Math.max(0, (Math.abs(driveOffset) - 20) / 60)) * 0.35;
-  const tintColor = verticalDrag
-    ? (offsetY < 0 ? "#5b8fff" : "#f59e0b")
-    : (offset >= 0 ? "#6BFF9E" : "#FF6B6B");
 
   function isCommanderEligible(c) {
     const type = c?.type_line ?? "";
@@ -336,20 +308,12 @@ export default function SwipeScreen({
               display: "flex", alignItems: "center", justifyContent: "center",
               pointerEvents: "none",
             }}>
+              {/* Frameless — the card art sits clean on the dark background */}
               <div style={{
                 position: "relative", lineHeight: 0,
                 width: "88vw",
                 height: "calc(88vw * 1.4)",
                 maxHeight: "62vh",
-                background: "var(--color-surface)",
-                borderStyle: "solid",
-                borderWidth: "2px",
-                borderTopColor: "var(--bevel-light)",
-                borderLeftColor: "var(--bevel-light)",
-                borderBottomColor: "var(--bevel-dark)",
-                borderRightColor: "var(--bevel-dark)",
-                borderRadius: 0,
-                boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
               }}>
                 <img
                   src={artUrl}
@@ -364,20 +328,11 @@ export default function SwipeScreen({
                     pointerEvents: "none",
                   }}
                 />
-                {/* Drag intent tint — scoped to card image only */}
-                <div style={{
-                  position: "absolute", inset: 0,
-                  background: tintColor,
-                  opacity: tintOpacity,
-                  pointerEvents: "none",
-                  transition: dragging ? "none" : "opacity 0.15s ease",
-                }} />
               </div>
             </div>
           ) : (
             <div style={{
               position: "absolute", inset: 0,
-              background: "var(--color-surface)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <span style={{
@@ -388,13 +343,6 @@ export default function SwipeScreen({
             </div>
           )}
 
-          {/* Gradient overlay */}
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.6) 75%, rgba(0,0,0,0.92) 100%)",
-            pointerEvents: "none",
-          }} />
-
           {/* Game Changer electric glow */}
           {isGameChanger && (
             <div style={{
@@ -404,72 +352,6 @@ export default function SwipeScreen({
               zIndex: 3,
             }} />
           )}
-
-          {/* Drag intent labels — opacity driven by offset/animOut */}
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", zIndex: 5,
-            transform: "translate(-50%, -50%) rotate(-15deg)",
-            opacity: animOut === "right" ? 0.9 : animOut ? 0 :
-                     verticalDrag ? 0 : Math.min(0.85, Math.max(0, (offset - 20) / 60)),
-            padding: "var(--space-2) var(--space-4)",
-            border: "4px solid #00aa00",
-            borderRadius: 0,
-            color: "#00aa00",
-            fontFamily: "var(--font-system)",
-            fontSize: "var(--font-size-xl)",
-            fontWeight: "bold",
-            background: "transparent",
-            pointerEvents: "none",
-            transition: dragging ? "none" : "opacity 0.15s ease",
-          }}>KEEP</div>
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", zIndex: 5,
-            transform: "translate(-50%, -50%) rotate(15deg)",
-            opacity: animOut === "left" ? 0.9 : animOut ? 0 :
-                     verticalDrag ? 0 : Math.min(0.85, Math.max(0, (-offset - 20) / 60)),
-            padding: "var(--space-2) var(--space-4)",
-            border: "4px solid #cc0000",
-            borderRadius: 0,
-            color: "#cc0000",
-            fontFamily: "var(--font-system)",
-            fontSize: "var(--font-size-xl)",
-            fontWeight: "bold",
-            background: "transparent",
-            pointerEvents: "none",
-            transition: dragging ? "none" : "opacity 0.15s ease",
-          }}>PASS</div>
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", zIndex: 5,
-            transform: "translate(-50%, -50%)",
-            opacity: animOut === "up" ? 0.9 : animOut ? 0 :
-                     !verticalDrag ? 0 : Math.min(0.85, Math.max(0, (-offsetY - 20) / 60)),
-            padding: "var(--space-2) var(--space-4)",
-            border: "4px solid #5b8fff",
-            borderRadius: 0,
-            color: "#5b8fff",
-            fontFamily: "var(--font-system)",
-            fontSize: "var(--font-size-xl)",
-            fontWeight: "bold",
-            background: "transparent",
-            pointerEvents: "none",
-            transition: dragging ? "none" : "opacity 0.15s ease",
-          }}>DECKLIST</div>
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", zIndex: 5,
-            transform: "translate(-50%, -50%)",
-            opacity: animOut === "down" ? 0.9 : animOut ? 0 :
-                     !verticalDrag ? 0 : Math.min(0.85, Math.max(0, (offsetY - 20) / 60)),
-            padding: "var(--space-2) var(--space-4)",
-            border: "4px solid #f59e0b",
-            borderRadius: 0,
-            color: "#f59e0b",
-            fontFamily: "var(--font-system)",
-            fontSize: "var(--font-size-xl)",
-            fontWeight: "bold",
-            background: "transparent",
-            pointerEvents: "none",
-            transition: dragging ? "none" : "opacity 0.15s ease",
-          }}>MAYBE</div>
 
           {/* Game Changer lightning badge */}
           {isGameChanger && (
@@ -605,14 +487,14 @@ export default function SwipeScreen({
             fontSize: 32, letterSpacing: 4, color: "var(--color-text-primary)",
           }}>ALL CARDS SEEN</div>
           <div style={{ fontFamily: "var(--font-system)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-            {pile.length} pile · {decklist.length} decklist · {maybeboard.length} maybe
+            {pile.length} pile · {decklist.length} mainboard · {maybeboard.length} maybe
           </div>
           <button
             onClick={onGoToPile}
             style={{
               marginTop: 8, padding: "12px 28px", borderRadius: 10,
-              border: "1px solid rgba(91,143,255,0.5)",
-              background: "rgba(91,143,255,0.12)",
+              border: "1px solid var(--primary)",
+              background: "transparent",
               color: "var(--primary)",
               fontFamily: "'Noto Sans', sans-serif",
               fontSize: 16, letterSpacing: 3, cursor: "pointer",
@@ -632,28 +514,20 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── First-run swipe hint (subtle arrow) ── */}
-      {showTip && !done && idx === 0 && !dragging && !animOut && (
+      {/* ── Gesture legend — persistent while a card is shown ── */}
+      {!done && (
         <div style={{
           position: "absolute",
-          bottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 32px)`,
-          left: 0, right: 0, zIndex: 4,
-          display: "flex", alignItems: "center", justifyContent: "center",
+          bottom: "calc(env(safe-area-inset-bottom) + 22px)",
+          left: 0, right: 0, zIndex: 2,
+          display: "flex", justifyContent: "center",
           pointerEvents: "none",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 11,
+          color: "var(--muted)",
+          whiteSpace: "pre",
         }}>
-          <style>{`
-            @keyframes swipeHint {
-              0%   { transform: translateX(-18px); opacity: 0.35; }
-              50%  { transform: translateX(18px);  opacity: 0.75; }
-              100% { transform: translateX(-18px); opacity: 0.35; }
-            }
-          `}</style>
-          <div style={{
-            animation: "swipeHint 1.8s ease-in-out infinite",
-            fontSize: 26, color: "rgba(255,255,255,0.65)",
-            fontFamily: "'Noto Sans', sans-serif",
-            letterSpacing: 4,
-          }}>← ↑ ↓ →</div>
+          {"← pass  ↑ mainboard  ↓ maybe  → keep"}
         </div>
       )}
     </div>

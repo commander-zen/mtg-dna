@@ -1,9 +1,13 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: Copy/cleanup pass on SearchScreen — the full-screen takeover works but still shows "DECK STACK" as the title, "Search. Swipe. Brew." tagline, deck-stack description copy, swipe-hint text, and deck-stack's Bluesky/GitHub footer links. Rebrand to Helix: Brew. After that: wire `onSearch` (currently a console.log stub in Brew.jsx) to the SwipeScreen/PileScreen pile flow.
+Priority: Wire `onSearch` (currently a console.log stub in Brew.jsx) to the SwipeScreen/PileScreen pile flow. Note the SearchScreen is now copy-bare — just input + SEARCH button with a large spacer above; it likely wants Helix: Brew heading/description copy in a follow-up design pass.
 
 ## Done
+- ✅ 2026-06-10 — SearchScreen copy cleanup:
+  - ✅ Removed "DECK STACK" heading, "Search. Swipe. Brew." tagline, Deck Stack description line, swipe-hint line, and the Bluesky/GitHub footer links
+  - ✅ Copy removal only — no layout/logic/style edits; spacer + input + progress bar + SEARCH button untouched
+  - ✅ `vite build` passes; grep confirms no target copy remains
 - ✅ 2026-06-10 — Helix: Brew tap target wired:
   - ✅ Brew.jsx: `brewView` state ("shell" | "search"); shell renders PageHeader + ToolChips as before; "search" renders SearchScreen in a position:fixed inset-0 zIndex:50 takeover with `brewThemeVars()` re-added, scoped to the takeover wrapper
   - ✅ tools.js: Helix: Brew entry carries `action: "brew-search"`; Brew.jsx resolves it to a live onClick (static data can't close over component state)
@@ -23,7 +27,7 @@ Priority: Copy/cleanup pass on SearchScreen — the full-screen takeover works b
   - ✅ P8: localStorage keys renamed (`ds_search_history`→`helixbrew_search_history`, `ds_swipe_hint_shown`→`helixbrew_swipe_hint_shown`, `cardstock_settings`→`helixbrew_settings`); zero deck-stack auth/db/supabase imports; `vite build` passes; all 12 brew files parse clean
 
 ## Known Issues
-- **SearchScreen still wears Deck Stack branding**: "DECK STACK" heading, old tagline/description, swipe-hint copy, Bluesky/GitHub footer links. Visible in the live takeover — copy/cleanup prompt is next.
+- **SearchScreen has no heading at all now**: the Deck Stack copy was removed without replacement (per spec), so the takeover shows a mostly-empty screen with the input/button pushed to the bottom by the flex spacer. Needs Helix: Brew copy in the design pass.
 - **SearchScreen ignores `onBack`**: it has no back affordance or `onBack` prop in its JSX. Brew.jsx passes `onBack` anyway (future use) and renders its own back button in the takeover wrapper as the actual exit.
 - **`onSearch` is a stub**: console.log only. SwipeScreen/PileScreen pile flow not wired; those components plus sheets/modals/services remain unreferenced and tree-shaken.
 - **"No other files touched" deviation (2026-06-10)**: ToolChips groups strictly by tier S/A/B — a tierless entry would not render at all. To make "Helix: Brew" appear first with no tier label, `src/components/ToolChips.jsx` was modified: row markup extracted to a shared `renderRow`, untiered entries render above the tier groups with identical styling and no heading. Same file later gained `tool.onClick` support for the tap wiring.

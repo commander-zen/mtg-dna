@@ -1,9 +1,16 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: Wire `onSearch` (currently a console.log stub in Brew.jsx) to the SwipeScreen/PileScreen pile flow. Note the SearchScreen is now copy-bare — just input + SEARCH button with a large spacer above; it likely wants Helix: Brew heading/description copy in a follow-up design pass.
+Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work (they reference `legends`, `decks.legend_id`, `decks.build_name`, and need `decks.url`/`platform` made nullable). After that: end-to-end test of search → swipe → review → save, then the visual design pass.
 
 ## Done
+- ✅ 2026-06-10 — Legends schema + full brew flow (prompts 1–5):
+  - ✅ P1: `supabase/migrations/002_legends.sql` written — legends table, `decks.legend_id` + `build_name`, `url`/`platform` made nullable. **NOT yet run** (needs SQL editor; no CLI/service key available)
+  - ✅ P2: Vault deck registry restored from `a0a6016` (it was deliberately stripped in the e968083 redesign) with the two-field pattern: commander name → legends upsert, build name → `decks.build_name`; legacy `legend` text column kept in sync; `deck_name` insert dropped (column doesn't exist in live schema)
+  - ✅ P3: `onSearch` wired to `fetchFirstPageForSwipe` (≤175 cards/page); errors render in SearchScreen; sort changes re-fetch
+  - ✅ P4: four-direction gesture map in SwipeScreen — left pass, right keep, up decklist (new board + prop), down maybe; dominant axis wins; DECKLIST/MAYBE drag labels; ArrowUp/Down keys; undo covers all three boards; useGameChangers + useDoubleTap (flip) now used
+  - ✅ P5: new ReviewScreen (presentational) groups pile/decklist/maybe with quantities; save flow in Brew.jsx: upsert legend → insert deck → batch-insert deck_cards (`section` ∈ pile/decklist/maybe)
+  - ✅ `vite build` passes (438 kB — swipe/review now bundled); live schema verified via REST probes (anon writes pass RLS)
 - ✅ 2026-06-10 — SearchScreen copy cleanup:
   - ✅ Removed "DECK STACK" heading, "Search. Swipe. Brew." tagline, Deck Stack description line, swipe-hint line, and the Bluesky/GitHub footer links
   - ✅ Copy removal only — no layout/logic/style edits; spacer + input + progress bar + SEARCH button untouched
@@ -27,6 +34,11 @@ Priority: Wire `onSearch` (currently a console.log stub in Brew.jsx) to the Swip
   - ✅ P8: localStorage keys renamed (`ds_search_history`→`helixbrew_search_history`, `ds_swipe_hint_shown`→`helixbrew_swipe_hint_shown`, `cardstock_settings`→`helixbrew_settings`); zero deck-stack auth/db/supabase imports; `vite build` passes; all 12 brew files parse clean
 
 ## Known Issues
+- **Migration 002 not run**: Vault submits and Brew saves will fail with column/table errors until `002_legends.sql` runs in the SQL editor. The app builds and browses fine without it.
+- **decks.platform CHECK constraint**: live values allow at least `moxfield`/`archidekt`; brew-created decks insert `platform: null` (allowed once 002 makes it nullable). If a 'brew' platform value is wanted later, the CHECK needs altering.
+- **Write-tool NUL corruption (caught)**: two NUL bytes landed in Brew.jsx during this session's write (would have corrupted saved card rows); stripped and verified repo-wide — no other text files affected.
+- **Commander identity is name-only**: legends rows store just `name` for now; `scryfall_id`/`image_uri` are nullable and unpopulated. Enrichment via `fetchCardByName` is a natural follow-up.
+- **SwipeScreen sort re-fetches mid-stack**: changing sort re-runs the search and resets the index; already-swiped cards reappear (dedup only filters pile, not decklist/maybe).
 - **SearchScreen has no heading at all now**: the Deck Stack copy was removed without replacement (per spec), so the takeover shows a mostly-empty screen with the input/button pushed to the bottom by the flex spacer. Needs Helix: Brew copy in the design pass.
 - **SearchScreen ignores `onBack`**: it has no back affordance or `onBack` prop in its JSX. Brew.jsx passes `onBack` anyway (future use) and renders its own back button in the takeover wrapper as the actual exit.
 - **`onSearch` is a stub**: console.log only. SwipeScreen/PileScreen pile flow not wired; those components plus sheets/modals/services remain unreferenced and tree-shaken.

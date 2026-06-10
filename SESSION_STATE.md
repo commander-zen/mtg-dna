@@ -1,9 +1,15 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: Hook up the "Helix: Brew" entry in BREW_TOOLS — it renders first in the Brew tool list but has no `url`, so tapping it does nothing. Decide destination (route to the brew experience vs. external link), then resume the visual iteration pass on the ported brew-components (still in repo at `src/brew-components/`, currently unreferenced/tree-shaken).
+Priority: Copy/cleanup pass on SearchScreen — the full-screen takeover works but still shows "DECK STACK" as the title, "Search. Swipe. Brew." tagline, deck-stack description copy, swipe-hint text, and deck-stack's Bluesky/GitHub footer links. Rebrand to Helix: Brew. After that: wire `onSearch` (currently a console.log stub in Brew.jsx) to the SwipeScreen/PileScreen pile flow.
 
 ## Done
+- ✅ 2026-06-10 — Helix: Brew tap target wired:
+  - ✅ Brew.jsx: `brewView` state ("shell" | "search"); shell renders PageHeader + ToolChips as before; "search" renders SearchScreen in a position:fixed inset-0 zIndex:50 takeover with `brewThemeVars()` re-added, scoped to the takeover wrapper
+  - ✅ tools.js: Helix: Brew entry carries `action: "brew-search"`; Brew.jsx resolves it to a live onClick (static data can't close over component state)
+  - ✅ ToolChips.jsx: rows call `tool.onClick` on tap; `target="_blank"`/`rel` only set when a `url` exists; pointer cursor on actionable rows
+  - ✅ Back button rendered in the takeover wrapper (top-left, 44px target) — exits to shell
+  - ✅ `vite build` passes (210 kB; SearchScreen + settings back in bundle)
 - ✅ 2026-06-10 — Brew tab reverted + tools data:
   - ✅ `src/pages/Brew.jsx` restored byte-identical to pre-prompt-7 shell (PageHeader + ToolChips)
   - ✅ "Helix: Brew" added as first BREW_TOOLS entry, no tier, same shape as other entries
@@ -17,9 +23,10 @@ Priority: Hook up the "Helix: Brew" entry in BREW_TOOLS — it renders first in 
   - ✅ P8: localStorage keys renamed (`ds_search_history`→`helixbrew_search_history`, `ds_swipe_hint_shown`→`helixbrew_swipe_hint_shown`, `cardstock_settings`→`helixbrew_settings`); zero deck-stack auth/db/supabase imports; `vite build` passes; all 12 brew files parse clean
 
 ## Known Issues
-- **"No other files touched" deviation (2026-06-10)**: ToolChips groups strictly by tier S/A/B — a tierless entry would not render at all. To make "Helix: Brew" appear first with no tier label, `src/components/ToolChips.jsx` was modified: row markup extracted to a shared `renderRow`, untiered entries render above the tier groups with identical styling and no heading.
-- **Helix: Brew entry is not a working link**: it has no `url`, so its row renders (name, desc, arrow) but navigates nowhere. Needs a destination — likely an in-app route to the brew experience.
-- **Brew port is parked, not removed**: prompts 1–8 artifacts (`src/brew-components/`, `src/lib/scryfall.js`, `settings.js`, `wrec.js`, `src/constants/wrec.js`, hooks, services) remain in the repo but nothing imports them since the Brew.jsx revert. The `brewThemeVars()` CSS-var bridge that lived in Brew.jsx was removed with the revert — re-add it when re-wiring.
+- **SearchScreen still wears Deck Stack branding**: "DECK STACK" heading, old tagline/description, swipe-hint copy, Bluesky/GitHub footer links. Visible in the live takeover — copy/cleanup prompt is next.
+- **SearchScreen ignores `onBack`**: it has no back affordance or `onBack` prop in its JSX. Brew.jsx passes `onBack` anyway (future use) and renders its own back button in the takeover wrapper as the actual exit.
+- **`onSearch` is a stub**: console.log only. SwipeScreen/PileScreen pile flow not wired; those components plus sheets/modals/services remain unreferenced and tree-shaken.
+- **"No other files touched" deviation (2026-06-10)**: ToolChips groups strictly by tier S/A/B — a tierless entry would not render at all. To make "Helix: Brew" appear first with no tier label, `src/components/ToolChips.jsx` was modified: row markup extracted to a shared `renderRow`, untiered entries render above the tier groups with identical styling and no heading. Same file later gained `tool.onClick` support for the tap wiring.
 - **Source snapshot**: deck-stack HEAD deleted SwipeScreen/SearchScreen/PileScreen in commit `33f167f` ("demolish old swipe/pile/search architecture", 2026-05-20). All files were copied from `33f167f^`, the last commit where screens and components coexisted. This predates deck-stack's May 21–23 redesign commits (Noto Sans migration, Y2K-strip) — fonts were handled in P6 anyway, but the copies are NOT deck-stack HEAD.
 - **P6 deviation**: the prompt's find-and-replace spec (Bebas Neue/DM Sans literals, `--bg`/`--panel` var set, auth/db import strips) didn't match the snapshot — files had no auth/db imports, fonts were mostly `var(--font-system)`, and styling uses deck-stack's Win98 token system (`--color-*`, `--bevel-*`, `--space-*`) in module-level style objects that can't call useTheme(). Instead of ~300 inline rewrites, all deck-stack CSS vars are defined from MTG DNA theme tokens in `brewThemeVars()` (Brew.jsx). Components keep `var(--x)` references and re-theme automatically, including light/dark.
 - **P7 deviation**: SearchScreen's props are `{ onSearch, loading, error, commanderCard, onCommanderCardChange }` — it doesn't accept a Supabase client. The client is passed as a `supabase` prop anyway (ignored for now). `onSearch` is a console.log stub; the search→pile flow isn't wired.

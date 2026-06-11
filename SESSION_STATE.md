@@ -4,6 +4,11 @@
 Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save.
 
 ## Done
+- ✅ 2026-06-11 — Loki dev seed (`24b531b`):
+  - ✅ `LOKI_CLONE_QUERY` exported from `src/lib/scryfall.js` (`legal:commander ci<=u t:creature o:"copy of" -o:"token"`) — hardcoded starting point, flagged do-not-improve; live-checked: 51 cards
+  - ✅ "// Loki test session" dev row on the mode-select screen (Noto Sans Mono, dimmed) — skips SearchScreen straight to SwipeScreen via the existing `runSearch` path; shows loading/error inline
+  - ✅ Session label "Loki, God of Mischief — oops all clones" shown in SwipeScreen's top strip via the `commanderCard` name prop; `sessionLabel` state cleared on normal searches and `resetBrew`
+  - ✅ Save/review flow untouched; build passes (430 kB)
 - ✅ 2026-06-11 — SwipeScreen carousel gesture model (`ed8ea5c`):
   - ✅ Horizontal swipe is browsing only — Instagram-style carousel (left = next, right = previous), animated slide, prev/next cards peek in from the edges at 0.45 opacity (92vw slot spacing)
   - ✅ Flick up (velocity > 0.6 px/ms or drag past 30% viewport height) → mainboard; flick down → maybeboard; card flies off, carousel advances

@@ -6,7 +6,7 @@ import { BREW_TOOLS } from "../data/tools";
 import SearchScreen from "../brew-components/screens/SearchScreen.jsx";
 import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
-import { fetchFirstPageForSwipe } from "../lib/scryfall.js";
+import { fetchFirstPageForSwipe, LOKI_CLONE_QUERY } from "../lib/scryfall.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -68,6 +68,9 @@ const BREW_VARS = {
   "--space-6": "32px",
 };
 
+// Temporary dev seed — skips SearchScreen and swipes the hardcoded Loki queue.
+const LOKI_SESSION_LABEL = "Loki, God of Mischief — oops all clones";
+
 const BREW_MODES = [
   { key: "legend",    name: "New Legend",     desc: "Start fresh around a commander" },
   { key: "import",    name: "Import Deck",    desc: "Bring in a Moxfield or Archidekt URL" },
@@ -77,7 +80,7 @@ const BREW_MODES = [
 
 // PageHeader pattern on the fixed dark palette. The shared component reads
 // useTheme(), which would follow the app's light mode in here.
-function BrewModeSelect({ onSelect }) {
+function BrewModeSelect({ onSelect, onDevSeed, devLoading, devError }) {
   return (
     <div style={{ padding: "28px 20px 40px", maxWidth: 430, margin: "0 auto" }}>
       <div style={{ marginBottom: 32 }}>
@@ -155,6 +158,31 @@ function BrewModeSelect({ onSelect }) {
           </div>
         ))}
       </div>
+
+      {/* Temporary fourth-wall dev seed — remove once real search flows land */}
+      <div
+        onClick={() => { if (!devLoading) onDevSeed(); }}
+        style={{
+          marginTop: 36,
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          color: BREW.dim,
+          cursor: devLoading ? "default" : "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        {devLoading ? "// Loki test session — loading…" : "// Loki test session"}
+      </div>
+      {devError && (
+        <div style={{
+          marginTop: 8,
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 11,
+          color: BREW.red,
+        }}>
+          {devError}
+        </div>
+      )}
     </div>
   );
 }
@@ -179,6 +207,7 @@ export default function Brew() {
   const [brewMode, setBrewMode] = useState(null);
 
   const [query, setQuery]           = useState("");
+  const [sessionLabel, setSessionLabel] = useState(null);
   const [swipeCards, setSwipeCards] = useState([]);
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [swipeOrder, setSwipeOrder] = useState("name");
@@ -195,6 +224,7 @@ export default function Brew() {
   function resetBrew() {
     setBrewMode(null);
     setQuery("");
+    setSessionLabel(null);
     setSwipeCards([]);
     setSwipeIndex(0);
     setPile([]);
@@ -204,13 +234,14 @@ export default function Brew() {
     setSaveError(null);
   }
 
-  async function runSearch(q, order = swipeOrder, dir = swipeDir) {
+  async function runSearch(q, order = swipeOrder, dir = swipeDir, label = null) {
     setLoading(true);
     setError(null);
     try {
       const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
       if (!cards.length) throw new Error("No cards found for that query.");
       setQuery(q);
+      setSessionLabel(label);
       setSwipeCards(cards);
       setSwipeIndex(0);
       setBrewView("swipe");
@@ -224,7 +255,7 @@ export default function Brew() {
   function handleSortChange(order, dir) {
     setSwipeOrder(order);
     setSwipeDir(dir);
-    if (query) runSearch(query, order, dir);
+    if (query) runSearch(query, order, dir, sessionLabel);
   }
 
   // Upsert legend → create deck → bulk insert deck_cards (002 schema).
@@ -335,6 +366,9 @@ export default function Brew() {
               setBrewMode(key);
               setBrewView("search");
             }}
+            onDevSeed={() => runSearch(LOKI_CLONE_QUERY, swipeOrder, swipeDir, LOKI_SESSION_LABEL)}
+            devLoading={loading}
+            devError={error}
           />
         )}
 
@@ -360,7 +394,7 @@ export default function Brew() {
             onGoToPile={() => setBrewView("review")}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
-            commanderCard={null}
+            commanderCard={sessionLabel ? { name: sessionLabel } : null}
             onCommanderCardChange={() => {}}
             initialIndex={swipeIndex}
             onIndexChange={setSwipeIndex}

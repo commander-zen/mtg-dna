@@ -99,6 +99,10 @@ export async function fetchFirstPage(query, options = {}) {
   return json.data ?? [];
 }
 
+// Dev-seed query: starting point for blue clones, to be hand-tuned later —
+// do not "improve" it.
+export const LOKI_CLONE_QUERY = 'legal:commander ci<=u t:creature o:"copy of" -o:"token"';
+
 // ── First-page swipe fetch — returns immediately so SwipeScreen can start ─────
 export async function fetchFirstPageForSwipe(query, commanderCard = null, options = {}) {
   const { signal, order = "name", dir = "auto" } = options;

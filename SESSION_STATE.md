@@ -1,9 +1,16 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: wire mode-specific behavior in Brew (`brewMode` is stored but all four modes currently route to the same search screen — Import Deck especially needs its own flow, the ported ImportSheet is a candidate), then end-to-end test of search → swipe → review → save.
+Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save.
 
 ## Done
+- ✅ 2026-06-11 — SwipeScreen carousel gesture model (`ed8ea5c`):
+  - ✅ Horizontal swipe is browsing only — Instagram-style carousel (left = next, right = previous), animated slide, prev/next cards peek in from the edges at 0.45 opacity (92vw slot spacing)
+  - ✅ Flick up (velocity > 0.6 px/ms or drag past 30% viewport height) → mainboard; flick down → maybeboard; card flies off, carousel advances
+  - ✅ Axis lock at 10px: horizontal can never become a flick, vertical can never become a browse; under-threshold vertical release springs back
+  - ✅ Left/right no longer sorts: `doResolve` (keep→pile / pass) removed; pile props, undo `kept` branch, and autosave plumbing left intact but unreachable by gesture
+  - ✅ Keyboard remapped: ArrowRight/Left browse, ArrowUp/Down still decide; gesture legend now "← browse →  ↑ mainboard  ↓ maybe"
+  - ✅ Build passes (429 kB)
 - ✅ 2026-06-10 — Brew overhaul (visual/interaction pass):
   - ✅ Forced dark palette for all Brew sub-screens (`BREW` constants in Brew.jsx: #0a0e1a base, #e8a020 amber, #7ab89a green) — sub-screens no longer follow app light mode
   - ✅ Mode-select screen between chip tap and search: New Legend / Import Deck / Free Pile / Card Discovery, PageHeader pattern (HELIX eyebrow, brew title, amber rule), ToolChips-style rows
@@ -46,6 +53,8 @@ Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql
 - ✅ 2026-06-10 — GRAVEYARD.md added at repo root: prototype consolidation record (deck-stack donor, pod-check / life-track / gold-fish / after-school-special sealed)
 
 ## Known Issues
+- **Pile is now gesture-unreachable (2026-06-11)**: with horizontal repurposed to browsing, nothing routes cards to the pile anymore. Review screen, save flow, done-state counts, and ReviewScreen's pile group still reference it (will just be empty). Decide whether pile goes away or gets a new affordance.
+- **"X KEPT" done-state label**: top strip still reports `pile.length` as KEPT when the stack is exhausted — stale wording now that keep/pass is gone.
 - **Vault reverted to shell (2026-06-10)**: per request, Vault.jsx is back to the bare PageHeader + ToolChips state (`b63d5cd^` / e968083, byte-identical). The commander+build registry form from `b63d5cd` is gone again — recover it from that commit if wanted. `lib/fetchDecklist.js` is now unused by any page.
 - **Migration 002 not run**: Brew saves will fail with column/table errors until `002_legends.sql` runs in the SQL editor. The app builds and browses fine without it.
 - **brewMode is cosmetic**: the mode selector stores the choice but all four modes route to the same search screen; no mode-specific behavior yet.

@@ -10,7 +10,6 @@ const isStackable  = c => isBasicLand(c) || isAnyNumber(c);
 
 // Carousel gesture model: horizontal browses, vertical decides.
 const AXIS_LOCK_PX = 10;          // movement that locks the gesture axis
-const SPACING_VW = 92;            // carousel slot width — neighbors peek at the edges
 const BROWSE_COMMIT_RATIO = 0.2;  // fraction of viewport width to commit a browse
 const BROWSE_VELOCITY = 0.5;      // px/ms — fast horizontal flick commits a browse
 const FLICK_RATIO = 0.3;          // fraction of viewport height to commit a decision
@@ -26,6 +25,9 @@ function haptic(pattern = 10) {
   if (!getSettings().haptics) return;
   try { navigator.vibrate(pattern); } catch {}
 }
+
+// Pixel width of a carousel slot — mirrors the cardWidth CSS (min(100vw - 48px, 420px)).
+const getCardPx = () => Math.min(window.innerWidth - 48, 420);
 
 export default function SwipeScreen({
   cards, pile, onPileChange,
@@ -96,9 +98,9 @@ export default function SwipeScreen({
     clearTimeout(longPressTimerRef.current);
   }, [idx]);
 
-  // Preload next 4 large images
+  // Preload next 3 large images so advancing never shows a half-loaded image
   useEffect(() => {
-    effectiveCards.slice(idx + 1, idx + 5).forEach(c => {
+    effectiveCards.slice(idx + 1, idx + 4).forEach(c => {
       const url = getCardImage(c, "large");
       if (url) { const img = new Image(); img.src = url; }
     });
@@ -138,7 +140,7 @@ export default function SwipeScreen({
     if (animOut || animBrowse || done) return;
     setAnimBrowse("next");
     haptic(4);
-    setOffset(-window.innerWidth * (SPACING_VW / 100));
+    setOffset(-getCardPx());
     setTimeout(() => {
       setIdx(i => i + 1);
       setOffset(0); setOffsetY(0); setAnimBrowse(null);
@@ -149,7 +151,7 @@ export default function SwipeScreen({
     if (animOut || animBrowse || done || idx === 0) { setOffset(0); return; }
     setAnimBrowse("prev");
     haptic(4);
-    setOffset(window.innerWidth * (SPACING_VW / 100));
+    setOffset(getCardPx());
     setTimeout(() => {
       setIdx(i => Math.max(0, i - 1));
       setOffset(0); setOffsetY(0); setAnimBrowse(null);
@@ -319,14 +321,14 @@ export default function SwipeScreen({
     if (card?.card_faces?.length > 1) setFlipped(f => !f);
   });
 
-  // The card dominates the screen — ~92vw, capped so it doesn't balloon on
-  // tablets, height follows the card aspect ratio with a viewport cap.
-  // Peek slivers (20px) + gaps (8px) flank the card on each side — the card
-  // shrinks to fit so the slivers are always visible at rest, not just mid-drag.
-  const cardWidth  = "min(calc(100vw - 56px), 420px)";
-  const cardHeight = "min(calc((100vw - 56px) * 1.4), calc(420px * 1.4), 70vh)";
-  const hasPrev = idx > 0;
-  const hasNext = idx < effectiveCards.length - 1;
+  // The card fills the screen with a 24px margin on each side, capped so it
+  // doesn't balloon on tablets. Neighbor slots sit one card-width away, so
+  // they naturally overhang the screen edges by ~24px — a real carousel
+  // track, not a separate sliver element.
+  const cardWidth  = "min(calc(100vw - 48px), 420px)";
+  const cardHeight = "min(calc((100vw - 48px) * 1.4), calc(420px * 1.4), 70vh)";
+  // Horizontal distance from the current slot to slot `n` (negative = left).
+  const slotShift = n => `calc((${cardWidth}) * ${n} + ${offset}px)`;
 
   return (
     <div style={{
@@ -365,7 +367,7 @@ export default function SwipeScreen({
               ? (animOut === "up"   ? "translateY(-110vh)"
               :  animOut === "down" ? "translateY(110vh)"
               :  `translate(${offset}px, ${offsetY}px)`)
-              : `translateX(calc(${(i - idx) * SPACING_VW}vw + ${offset}px))`;
+              : `translateX(${slotShift(i - idx)})`;
             return (
               <div
                 key={c.id ?? i}
@@ -373,7 +375,7 @@ export default function SwipeScreen({
                   position: "absolute", inset: 0,
                   transform,
                   transition: isCurrent ? currentTransition : stripTransition,
-                  opacity: isCurrent ? (animOut ? 0 : 1) : 0.45,
+                  opacity: isCurrent && animOut ? 0 : 1,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   pointerEvents: "none",
                 }}
@@ -457,36 +459,6 @@ export default function SwipeScreen({
               </div>
             );
           })}
-
-          {/* Edge peek — "there's more here" affordance. A card-back-colored
-              sliver stands in for the neighbor; tracks the horizontal drag
-              so the carousel reads as one continuous strip. */}
-          {hasPrev && (
-            <div style={{
-              position: "absolute",
-              left: 0, top: "50%",
-              width: 20,
-              height: cardHeight,
-              transform: `translateY(-50%) translateX(${offset}px)`,
-              transition: stripTransition,
-              background: "#1a1208",
-              borderRight: "1px solid rgba(200,150,12,0.35)",
-              pointerEvents: "none",
-            }} />
-          )}
-          {hasNext && (
-            <div style={{
-              position: "absolute",
-              right: 0, top: "50%",
-              width: 20,
-              height: cardHeight,
-              transform: `translateY(-50%) translateX(${offset}px)`,
-              transition: stripTransition,
-              background: "#1a1208",
-              borderLeft: "1px solid rgba(200,150,12,0.35)",
-              pointerEvents: "none",
-            }} />
-          )}
         </div>
       )}
 

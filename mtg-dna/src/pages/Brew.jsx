@@ -310,14 +310,13 @@ export default function Brew() {
   );
 
   if (brewView !== "shell") {
+    // A session launched from the Loki dev seed has no real search to return
+    // to — its "back" is the mode/seed screen instead.
+    const isLokiSession = sessionLabel === LOKI_SESSION_LABEL;
     const backTarget = brewView === "modes" ? "shell"
       : brewView === "search" ? "modes"
-      : brewView === "swipe" ? "search"
+      : brewView === "swipe" ? (isLokiSession ? "modes" : "search")
       : "swipe";
-    // Swipe view: the stack strip owns the top edge, so the exit moves bottom-left.
-    const backPosition = brewView === "swipe"
-      ? { bottom: 10, left: 10 }
-      : { top: 10, left: 10 };
 
     return (
       <div style={{
@@ -329,36 +328,38 @@ export default function Brew() {
         WebkitOverflowScrolling: "touch",
         ...BREW_VARS,
       }}>
-        <button
-          onClick={() => setBrewView(backTarget)}
-          aria-label="Back"
-          style={{
-            position: "fixed",
-            ...backPosition,
-            zIndex: 51,
-            width: 44,
-            height: 44,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            color: BREW.text,
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span
-            className="material-symbols-rounded"
+        {brewView !== "swipe" && (
+          <button
+            onClick={() => setBrewView(backTarget)}
+            aria-label="Back"
             style={{
-              fontSize: 22,
-              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+              position: "fixed",
+              top: 10, left: 10,
+              zIndex: 51,
+              width: 44,
+              height: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              color: BREW.text,
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            arrow_back
-          </span>
-        </button>
+            <span
+              className="material-symbols-rounded"
+              style={{
+                fontSize: 22,
+                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+              }}
+            >
+              arrow_back
+            </span>
+          </button>
+        )}
 
         {brewView === "modes" && (
           <BrewModeSelect
@@ -392,6 +393,7 @@ export default function Brew() {
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => setBrewView("review")}
+            onExit={() => setBrewView(backTarget)}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
             commanderCard={sessionLabel ? { name: sessionLabel } : null}

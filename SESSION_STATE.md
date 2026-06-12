@@ -1,9 +1,19 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATIONS** — `mtg-dna/supabase/migrations/002_legends.sql` AND the new `003_legend_identity.sql` (adds `type_line`/`oracle_text`/`mana_cost` to `legends`) must both be run manually in the Supabase SQL editor before the Vault form, Brew save, LegendBox/AddLegendSheet flow, or the identity-backfill writes will work in prod (all legends.upsert/update calls are unverified live). After that: end-to-end test of Home → LegendBox grid (100-card gate, identity backfill, brightness-lifted gated art) → LegendIdentity → brew verb (attached-deck session) → AddLegendSheet "add legend" flow on a live deck/device, decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen).
+Priority: **RUN THE MIGRATIONS** — `mtg-dna/supabase/migrations/002_legends.sql`, `003_legend_identity.sql` (`type_line`/`oracle_text`/`mana_cost`), AND the new `004_legend_color_identity.sql` (`color_identity text[]`, used to auto-seed the brew swipe queue) must all be run manually in the Supabase SQL editor before the Vault form, Brew save, LegendBox/AddLegendSheet flow, identity-backfill writes, or the brew auto-seed will work in prod (all legends.upsert/update calls are unverified live). After that: end-to-end test of Home → LegendBox grid (100-card gate, identity backfill, brightness-lifted gated art) → LegendIdentity → restyled "brew" button → direct-to-swipe auto-seeded session (attached-deck merge, in-swipe search re-seed) → AddLegendSheet "add legend" flow (now portal-rendered) → nav tab root-reset on a live deck/device. Decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but only the "legend" session path has real behavior).
 
 ## Done
+- ✅ 2026-06-12 — Brew: primary-action styling, direct-to-swipe with auto-seeded queue (`fb258d1`):
+  - ✅ LegendIdentity "brew" verb restyled: full-width 48px outlined button (gold/amber border, transparent fill, gold lowercase Zilla Slab), pressed state fills gold with base-color text
+  - ✅ Legend-attached brew sessions skip search/mode-select and drop straight into the swipe carousel; SwipeScreen gained a search-icon affordance (left of the tally, wired to `onGoToSearch`) to re-seed mid-session — "back" from that search returns to swipe, "back" from swipe (session) exits to LegendIdentity
+  - ✅ Seed query: `legal:commander ci<=<color_identity> -t:land`, `order: edhrec`, cards already in the attached deck filtered out client-side
+  - ✅ New `supabase/migrations/004_legend_color_identity.sql` (`color_identity text[]`, not yet run, see Cold Start Prompt); `color_identity` added to both lazy-backfill paths (LegendBox grid load, Brew save) and LegendBox's `legends` select
+  - ✅ Build passes (444.04 kB)
+- ✅ 2026-06-12 — Nav: tab icons return to root; AddLegendSheet truly above nav (`b69e9ad`):
+  - ✅ App.jsx `handleNavigate(id)`: tapping Home always resets `selectedLegend` (returns to the Box from LegendIdentity); tapping Brew bumps a `brewResetSignal` that Brew watches to snap `brewView` back to "shell" without discarding pile/decklist/session state
+  - ✅ Diagnosed AddLegendSheet clipping: z-index (221) was already above NavBar (100), but the sheet is rendered inside App's `overflow: hidden` content container — iOS Safari clips `position: fixed` descendants to an `overflow: hidden` ancestor's bounds even without a transform/filter (WebKit quirk), cutting off the sheet at the container edge near the nav. Fixed via `createPortal` to `document.body`.
+  - ✅ Build passes (442.75 kB)
 - ✅ 2026-06-11 — Legends: lazy Scryfall backfill for rows missing identity, gated art brightness lift (`7fa18ef`):
   - ✅ New `supabase/migrations/003_legend_identity.sql` — adds `type_line`, `oracle_text`, `mana_cost` to `legends` (not yet run, see Cold Start Prompt)
   - ✅ New `fetchCardIdentity(name)` in scryfall.js — exact `named?exact=` lookup, falling back to `named?fuzzy=`, returns `null` (no throw) on no match

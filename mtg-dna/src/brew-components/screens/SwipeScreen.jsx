@@ -31,7 +31,7 @@ export default function SwipeScreen({
   cards, pile, onPileChange,
   maybeboard, onMaybeboardChange,
   decklist = [], onDecklistChange,
-  onGoToPile, onGoToSearch, onSearchMore, commanderCard, onCommanderCardChange,
+  onGoToPile, onExit, onGoToSearch, onSearchMore, commanderCard, onCommanderCardChange,
   initialIndex, onIndexChange,
   swipeOrder = "name", swipeDir = "desc", onSortChange,
   onGoToBrews,
@@ -321,8 +321,10 @@ export default function SwipeScreen({
 
   // The card dominates the screen — ~92vw, capped so it doesn't balloon on
   // tablets, height follows the card aspect ratio with a viewport cap.
-  const cardWidth  = "min(92vw, 420px)";
-  const cardHeight = "min(calc(92vw * 1.4), calc(420px * 1.4), 70vh)";
+  // Peek slivers (20px) + gaps (8px) flank the card on each side — the card
+  // shrinks to fit so the slivers are always visible at rest, not just mid-drag.
+  const cardWidth  = "min(calc(100vw - 56px), 420px)";
+  const cardHeight = "min(calc((100vw - 56px) * 1.4), calc(420px * 1.4), 70vh)";
   const hasPrev = idx > 0;
   const hasNext = idx < effectiveCards.length - 1;
 
@@ -463,11 +465,12 @@ export default function SwipeScreen({
             <div style={{
               position: "absolute",
               left: 0, top: "50%",
-              width: 16,
+              width: 20,
               height: cardHeight,
               transform: `translateY(-50%) translateX(${offset}px)`,
               transition: stripTransition,
-              background: "var(--color-surface)",
+              background: "#1a1208",
+              borderRight: "1px solid rgba(200,150,12,0.35)",
               pointerEvents: "none",
             }} />
           )}
@@ -475,11 +478,12 @@ export default function SwipeScreen({
             <div style={{
               position: "absolute",
               right: 0, top: "50%",
-              width: 16,
+              width: 20,
               height: cardHeight,
               transform: `translateY(-50%) translateX(${offset}px)`,
               transition: stripTransition,
-              background: "var(--color-surface)",
+              background: "#1a1208",
+              borderLeft: "1px solid rgba(200,150,12,0.35)",
               pointerEvents: "none",
             }} />
           )}
@@ -497,8 +501,8 @@ export default function SwipeScreen({
         background: "transparent",
       }}>
         <button
-          onClick={onGoToPile}
-          aria-label="Exit to review"
+          onClick={onExit}
+          aria-label="Back to search"
           style={{
             width: 40, height: 40,
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -534,15 +538,32 @@ export default function SwipeScreen({
           {commanderName ?? ""}
         </div>
 
-        <div style={{
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 12,
-          color: "var(--muted)",
-          padding: "0 8px",
-          flexShrink: 0,
-        }}>
-          {decklist.length} · {maybeboard.length}
-        </div>
+        <button
+          onClick={onGoToPile}
+          aria-label="Open review"
+          style={{
+            display: "flex", alignItems: "center", gap: 2,
+            minHeight: 44,
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 12,
+            color: "var(--muted)",
+            background: "transparent", border: "none",
+            padding: "0 8px",
+            flexShrink: 0,
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span style={{ textDecoration: "underline", textDecorationColor: "rgba(255,255,255,0.2)" }}>
+            {decklist.length} · {maybeboard.length}
+          </span>
+          <span
+            className="material-symbols-rounded"
+            style={{ fontSize: 14, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
+          >
+            chevron_right
+          </span>
+        </button>
       </div>
 
       {/* ── Stack info strip (top) ── */}

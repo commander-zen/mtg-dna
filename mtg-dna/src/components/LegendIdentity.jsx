@@ -177,10 +177,14 @@ export default function LegendIdentity({ legend, onBack, onBrew }) {
             return (
               <div
                 key={deck.id}
+                onClick={() => onBrew(legend, deck, { startView: "review" })}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
+                  minHeight: 44,
                   padding: "12px 0",
                   borderBottom: `1px solid ${borderColor}`,
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 <div style={{

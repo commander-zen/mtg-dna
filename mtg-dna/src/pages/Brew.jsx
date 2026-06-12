@@ -187,6 +187,20 @@ function BrewModeSelect({ onSelect, onDevSeed, devLoading, devError }) {
   );
 }
 
+// Inverse of buildCardRows: expand a deck's existing deck_cards rows back
+// into per-instance card entries for a given section, so the swipe tally
+// and review screen reflect live deck contents on resume rather than zero.
+function expandRows(rows, section) {
+  const result = [];
+  for (const r of rows) {
+    if (r.section !== section) continue;
+    for (let i = 0; i < r.quantity; i++) {
+      result.push({ name: r.card_name, instanceId: crypto.randomUUID() });
+    }
+  }
+  return result;
+}
+
 // Collapse instances to (card_name, section) rows with quantities for deck_cards.
 function buildCardRows(deckId, boards) {
   const rows = [];
@@ -261,7 +275,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
           .select("card_name, quantity, section")
           .eq("deck_id", deckId);
         existingRows = data ?? [];
-        if (!cancelled) setExistingCardRows(existingRows);
+        if (!cancelled) {
+          setExistingCardRows(existingRows);
+          // Tally on resume: the header/review counts read live deck contents,
+          // not zero — flicks increment from here.
+          setDecklist(expandRows(existingRows, "decklist"));
+          setMaybeboard(expandRows(existingRows, "maybe"));
+          setPile(expandRows(existingRows, "pile"));
+        }
       }
 
       let colorIdentity = session.legend.color_identity;
@@ -273,7 +294,17 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
         }
       }
       if (cancelled) return;
-      await seedSwipeQueue(colorIdentity, existingRows);
+
+      // Deck row is a door: opening a deck from LegendIdentity lands directly
+      // on its live review, not the swipe carousel. The queue still seeds in
+      // the background (excluding everything already in the deck) so review's
+      // back arrow can drop straight into "continue brewing".
+      if (session.startView === "review") {
+        setBrewView("review");
+        await seedSwipeQueue(colorIdentity, existingRows, { setView: false });
+      } else {
+        await seedSwipeQueue(colorIdentity, existingRows);
+      }
     })();
     return () => { cancelled = true; };
   }, [session]);
@@ -281,7 +312,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // legal:commander ci<=<identity> -t:land, ordered by edhrec popularity —
   // dev seed for the legend-attached session's initial queue. Cards already
   // in the attached deck are filtered out client-side.
-  async function seedSwipeQueue(colorIdentity, excludeRows = []) {
+  async function seedSwipeQueue(colorIdentity, excludeRows = [], { setView = true } = {}) {
     setLoading(true);
     setError(null);
     try {
@@ -289,14 +320,17 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const q = `legal:commander ci<=${ci} -t:land`;
       const { cards } = await fetchFirstPageForSwipe(q, null, { order: "edhrec" });
       if (!cards.length) throw new Error("No cards found for that query.");
+      // Exclude every card already in the deck, on either board — recomputed
+      // from live deck_cards on every entry, not just the session that first
+      // seeded the queue.
       const exclude = new Set(excludeRows.map(r => r.card_name));
       setQuery(q);
       setSwipeCards(cards.filter(c => !exclude.has(c.name)));
       setSwipeIndex(0);
-      setBrewView("swipe");
+      if (setView) setBrewView("swipe");
     } catch (err) {
       setError(err.message);
-      setBrewView("search");
+      if (setView) setBrewView("search");
     } finally {
       setLoading(false);
     }

@@ -25,8 +25,8 @@ export default function App() {
     if (id === "brew") setBrewResetSignal(s => s + 1);
   }
 
-  function handleLaunchBrew(legend, inProgressDeck) {
-    setBrewSession({ legend, deckId: inProgressDeck?.id ?? null });
+  function handleLaunchBrew(legend, deck, opts) {
+    setBrewSession({ legend, deckId: deck?.id ?? null, startView: opts?.startView ?? null });
     setActivePage("brew");
   }
 

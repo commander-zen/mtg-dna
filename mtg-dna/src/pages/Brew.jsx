@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import ToolChips from "../components/ToolChips";
 import PageHeader from "../components/PageHeader";
@@ -200,7 +200,7 @@ function buildCardRows(deckId, boards) {
   return rows;
 }
 
-export default function Brew() {
+export default function Brew({ session, onSessionDone }) {
   const { theme } = useTheme();
   // shell | modes | search | swipe | review
   const [brewView, setBrewView] = useState("shell");
@@ -221,6 +221,27 @@ export default function Brew() {
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState(null);
 
+  // A legend-attached session (launched from LegendIdentity's "brew" verb)
+  // skips commander selection and lands directly on the search screen,
+  // optionally attaching to that legend's in-progress deck.
+  const [attachDeckId, setAttachDeckId]       = useState(null);
+  const [existingCardRows, setExistingCardRows] = useState([]);
+
+  useEffect(() => {
+    if (!session || brewView !== "shell") return;
+    setBrewMode("legend");
+    setSessionLabel(session.legend.name);
+    if (session.deckId) {
+      setAttachDeckId(session.deckId);
+      supabase
+        .from("deck_cards")
+        .select("card_name, quantity, section")
+        .eq("deck_id", session.deckId)
+        .then(({ data }) => setExistingCardRows(data ?? []));
+    }
+    setBrewView("search");
+  }, [session]);
+
   function resetBrew() {
     setBrewMode(null);
     setQuery("");
@@ -232,16 +253,18 @@ export default function Brew() {
     setMaybeboard([]);
     setError(null);
     setSaveError(null);
+    setAttachDeckId(null);
+    setExistingCardRows([]);
   }
 
-  async function runSearch(q, order = swipeOrder, dir = swipeDir, label = null) {
+  async function runSearch(q, order = swipeOrder, dir = swipeDir, label) {
     setLoading(true);
     setError(null);
     try {
       const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
       if (!cards.length) throw new Error("No cards found for that query.");
       setQuery(q);
-      setSessionLabel(label);
+      setSessionLabel(label !== undefined ? label : sessionLabel);
       setSwipeCards(cards);
       setSwipeIndex(0);
       setBrewView("swipe");
@@ -258,44 +281,90 @@ export default function Brew() {
     if (query) runSearch(query, order, dir, sessionLabel);
   }
 
+  // Attached session: merge newly-swiped cards into the existing deck's
+  // rows (combining quantities by card_name + section) and replace the
+  // deck_cards rows wholesale, so save UPDATES the deck instead of
+  // creating a duplicate.
+  async function saveAttachedDeck() {
+    const newRows = buildCardRows(attachDeckId, [
+      ["pile", pile],
+      ["decklist", decklist],
+      ["maybe", maybeboard],
+    ]);
+
+    const merged = new Map();
+    for (const r of existingCardRows) {
+      merged.set(`${r.card_name}|${r.section}`, { deck_id: attachDeckId, card_name: r.card_name, section: r.section, quantity: r.quantity });
+    }
+    for (const r of newRows) {
+      const key = `${r.card_name}|${r.section}`;
+      const existing = merged.get(key);
+      if (existing) existing.quantity += r.quantity;
+      else merged.set(key, r);
+    }
+    const rows = [...merged.values()];
+
+    const { error: delError } = await supabase
+      .from("deck_cards")
+      .delete()
+      .eq("deck_id", attachDeckId);
+    if (delError) throw delError;
+
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error: cardError } = await supabase
+        .from("deck_cards")
+        .insert(rows.slice(i, i + 100));
+      if (cardError) throw cardError;
+    }
+  }
+
   // Upsert legend → create deck → bulk insert deck_cards (002 schema).
   async function handleConfirmSave(commanderName, buildName) {
     setSaving(true);
     setSaveError(null);
     try {
-      const { data: legend, error: legendError } = await supabase
-        .from("legends")
-        .upsert({ name: commanderName }, { onConflict: "name" })
-        .select()
-        .single();
-      if (legendError) throw legendError;
+      if (attachDeckId) {
+        await saveAttachedDeck();
+      } else {
+        const { data: legend, error: legendError } = await supabase
+          .from("legends")
+          .upsert({ name: commanderName }, { onConflict: "name" })
+          .select()
+          .single();
+        if (legendError) throw legendError;
 
-      const { data: deck, error: deckError } = await supabase
-        .from("decks")
-        .insert({
-          legend: commanderName, // legacy text column, kept in sync
-          legend_id: legend.id,
-          build_name: buildName || null,
-          status: "Active",
-        })
-        .select()
-        .single();
-      if (deckError) throw deckError;
+        const { data: deck, error: deckError } = await supabase
+          .from("decks")
+          .insert({
+            legend: commanderName, // legacy text column, kept in sync
+            legend_id: legend.id,
+            build_name: buildName || null,
+            status: "Active",
+          })
+          .select()
+          .single();
+        if (deckError) throw deckError;
 
-      const rows = buildCardRows(deck.id, [
-        ["pile", pile],
-        ["decklist", decklist],
-        ["maybe", maybeboard],
-      ]);
-      for (let i = 0; i < rows.length; i += 100) {
-        const { error: cardError } = await supabase
-          .from("deck_cards")
-          .insert(rows.slice(i, i + 100));
-        if (cardError) throw cardError;
+        const rows = buildCardRows(deck.id, [
+          ["pile", pile],
+          ["decklist", decklist],
+          ["maybe", maybeboard],
+        ]);
+        for (let i = 0; i < rows.length; i += 100) {
+          const { error: cardError } = await supabase
+            .from("deck_cards")
+            .insert(rows.slice(i, i + 100));
+          if (cardError) throw cardError;
+        }
       }
 
+      const wasSession = !!session;
       resetBrew();
-      setBrewView("shell");
+      if (wasSession) {
+        onSessionDone?.();
+      } else {
+        setBrewView("shell");
+      }
     } catch (err) {
       setSaveError(err.message);
     } finally {
@@ -313,10 +382,22 @@ export default function Brew() {
     // A session launched from the Loki dev seed has no real search to return
     // to — its "back" is the mode/seed screen instead.
     const isLokiSession = sessionLabel === LOKI_SESSION_LABEL;
+    // A legend-attached session skipped commander selection entirely, so
+    // "back" from search exits the session (returns to LegendIdentity)
+    // rather than going to the mode-select screen.
     const backTarget = brewView === "modes" ? "shell"
-      : brewView === "search" ? "modes"
+      : brewView === "search" ? (session ? null : "modes")
       : brewView === "swipe" ? (isLokiSession ? "modes" : "search")
       : "swipe";
+
+    function handleBack() {
+      if (backTarget === null) {
+        resetBrew();
+        onSessionDone?.();
+      } else {
+        setBrewView(backTarget);
+      }
+    }
 
     return (
       <div style={{
@@ -330,7 +411,7 @@ export default function Brew() {
       }}>
         {brewView !== "swipe" && (
           <button
-            onClick={() => setBrewView(backTarget)}
+            onClick={handleBack}
             aria-label="Back"
             style={{
               position: "fixed",

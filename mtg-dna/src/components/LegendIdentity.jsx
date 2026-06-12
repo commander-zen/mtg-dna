@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
+import { supabase } from "../lib/supabase.js";
 import { fetchCardByName, getCardImage, formatManaCost } from "../lib/scryfall.js";
 
 const DECK_GATE = 100;
@@ -14,6 +15,7 @@ function deckTotal(deck) {
 export default function LegendIdentity({ legend, onBack, onBrew }) {
   const { theme, mode } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
+  const [decks, setDecks] = useState(legend.decks ?? []);
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
   const textColor   = mode === "light" ? theme.ink   : theme.white;
@@ -29,7 +31,21 @@ export default function LegendIdentity({ legend, onBack, onBrew }) {
     return () => { cancelled = true; };
   }, [legend.name]);
 
-  const decks = legend.decks ?? [];
+  // Re-fetch this legend's decks so counts reflect the latest save —
+  // the `legend` prop carries the snapshot from when the Box tile was tapped.
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("legends")
+      .select("decks(id, status, build_name, deck_cards(quantity))")
+      .eq("id", legend.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!cancelled && !error && data) setDecks(data.decks ?? []);
+      });
+    return () => { cancelled = true; };
+  }, [legend.id]);
+
   const highest = decks.reduce((max, d) => Math.max(max, deckTotal(d)), 0);
   const gated = highest < DECK_GATE;
 

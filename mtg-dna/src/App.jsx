@@ -12,6 +12,18 @@ const NAV_HEIGHT = 60;
 export default function App() {
   const { theme } = useTheme();
   const [activePage, setActivePage] = useState("home");
+  const [selectedLegend, setSelectedLegend] = useState(null);
+  const [brewSession, setBrewSession] = useState(null);
+
+  function handleLaunchBrew(legend, inProgressDeck) {
+    setBrewSession({ legend, deckId: inProgressDeck?.id ?? null });
+    setActivePage("brew");
+  }
+
+  function handleBrewSessionDone() {
+    setBrewSession(null);
+    setActivePage("home");
+  }
 
   useEffect(() => {
     document.body.style.margin = "0";
@@ -34,9 +46,17 @@ export default function App() {
         overflow: "hidden",
         paddingBottom: NAV_HEIGHT,
       }}>
-        {activePage === "home"     && <Home />}
+        {activePage === "home"     && (
+          <Home
+            selectedLegend={selectedLegend}
+            onSelectLegend={setSelectedLegend}
+            onLaunchBrew={handleLaunchBrew}
+          />
+        )}
         {activePage === "vault"    && <Vault />}
-        {activePage === "brew"     && <Brew />}
+        {activePage === "brew"     && (
+          <Brew session={brewSession} onSessionDone={handleBrewSessionDone} />
+        )}
         {activePage === "table"    && <Table />}
         {activePage === "notebook" && <Notebook />}
       </div>

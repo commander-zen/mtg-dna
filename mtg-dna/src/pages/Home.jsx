@@ -1,26 +1,19 @@
-import { useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import PageHeader from "../components/PageHeader";
 import LegendBox from "../components/LegendBox";
 import LegendIdentity from "../components/LegendIdentity";
 
-export default function Home() {
+export default function Home({ selectedLegend, onSelectLegend, onLaunchBrew }) {
   const { theme, mode, toggleTheme } = useTheme();
   const mutedColor  = mode === "light" ? `${theme.ink}b3` : `${theme.white}99`;
   const borderColor = mode === "light" ? theme.border      : theme.muted;
-
-  const [selectedLegend, setSelectedLegend] = useState(null);
-
-  function handleBrew(legend, inProgressDeck) {
-    console.log("brew", legend, inProgressDeck);
-  }
 
   if (selectedLegend) {
     return (
       <LegendIdentity
         legend={selectedLegend}
-        onBack={() => setSelectedLegend(null)}
-        onBrew={handleBrew}
+        onBack={() => onSelectLegend(null)}
+        onBrew={onLaunchBrew}
       />
     );
   }
@@ -36,7 +29,7 @@ export default function Home() {
       <div style={{ padding: "28px 20px 40px" }}>
         <PageHeader eyebrow="Helix" title="home" />
 
-        <LegendBox onSelectLegend={setSelectedLegend} />
+        <LegendBox onSelectLegend={onSelectLegend} />
 
         <div style={{
           marginTop: 40,

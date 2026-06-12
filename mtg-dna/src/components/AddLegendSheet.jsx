@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { searchCommanders } from "../lib/scryfall.js";
 
@@ -42,7 +43,7 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
     onSelect(card);
   }
 
-  return (
+  return createPortal(
     <>
       <div
         onClick={onClose}
@@ -131,6 +132,7 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

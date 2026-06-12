@@ -14,6 +14,16 @@ export default function App() {
   const [activePage, setActivePage] = useState("home");
   const [selectedLegend, setSelectedLegend] = useState(null);
   const [brewSession, setBrewSession] = useState(null);
+  const [brewResetSignal, setBrewResetSignal] = useState(0);
+
+  // Tab icons always return their tab to its root view, even when already
+  // on that tab — tapping Home from LegendIdentity goes back to the Box,
+  // tapping Brew from inside a session goes back to the brew landing.
+  function handleNavigate(id) {
+    setActivePage(id);
+    if (id === "home") setSelectedLegend(null);
+    if (id === "brew") setBrewResetSignal(s => s + 1);
+  }
 
   function handleLaunchBrew(legend, inProgressDeck) {
     setBrewSession({ legend, deckId: inProgressDeck?.id ?? null });
@@ -55,13 +65,13 @@ export default function App() {
         )}
         {activePage === "vault"    && <Vault />}
         {activePage === "brew"     && (
-          <Brew session={brewSession} onSessionDone={handleBrewSessionDone} />
+          <Brew session={brewSession} onSessionDone={handleBrewSessionDone} resetSignal={brewResetSignal} />
         )}
         {activePage === "table"    && <Table />}
         {activePage === "notebook" && <Notebook />}
       </div>
 
-      <NavBar activePage={activePage} onNavigate={setActivePage} />
+      <NavBar activePage={activePage} onNavigate={handleNavigate} />
     </div>
   );
 }

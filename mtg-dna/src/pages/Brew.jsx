@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import ToolChips from "../components/ToolChips";
 import PageHeader from "../components/PageHeader";
@@ -200,7 +200,7 @@ function buildCardRows(deckId, boards) {
   return rows;
 }
 
-export default function Brew({ session, onSessionDone }) {
+export default function Brew({ session, onSessionDone, resetSignal }) {
   const { theme } = useTheme();
   // shell | modes | search | swipe | review
   const [brewView, setBrewView] = useState("shell");
@@ -241,6 +241,17 @@ export default function Brew({ session, onSessionDone }) {
     }
     setBrewView("search");
   }, [session]);
+
+  // Tapping the Brew tab while already on this page returns to the landing
+  // (shell) view without discarding the in-progress session — only react
+  // to changes after mount, so this doesn't fight the session-init effect.
+  const lastResetSignal = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal !== lastResetSignal.current) {
+      lastResetSignal.current = resetSignal;
+      setBrewView("shell");
+    }
+  }, [resetSignal]);
 
   function resetBrew() {
     setBrewMode(null);

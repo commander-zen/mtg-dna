@@ -26,8 +26,9 @@ function haptic(pattern = 10) {
   try { navigator.vibrate(pattern); } catch {}
 }
 
-// Pixel width of a carousel slot — mirrors the cardWidth CSS (min(100vw - 48px, 420px)).
-const getCardPx = () => Math.min(window.innerWidth - 48, 420);
+// Pixel width of a carousel slot — mirrors the cardWidth CSS (min(96vw, 440px))
+// plus the 4px gap between neighboring cards.
+const getCardPx = () => Math.min(window.innerWidth * 0.96, 440) + 4;
 
 export default function SwipeScreen({
   cards, pile, onPileChange,
@@ -321,14 +322,13 @@ export default function SwipeScreen({
     if (card?.card_faces?.length > 1) setFlipped(f => !f);
   });
 
-  // The card fills the screen with a 24px margin on each side, capped so it
-  // doesn't balloon on tablets. Neighbor slots sit one card-width away, so
-  // they naturally overhang the screen edges by ~24px — a real carousel
-  // track, not a separate sliver element.
-  const cardWidth  = "min(calc(100vw - 48px), 420px)";
-  const cardHeight = "min(calc((100vw - 48px) * 1.4), calc(420px * 1.4), 70vh)";
+  // The card nearly fills the screen, capped so it doesn't balloon on
+  // tablets. Neighbor slots sit one card-width + 4px gap away, so cards
+  // overhang the screen edges and almost touch — a tight carousel track.
+  const cardWidth  = "min(96vw, 440px)";
+  const cardHeight = "min(calc(96vw * 1.4), calc(440px * 1.4), 70vh)";
   // Horizontal distance from the current slot to slot `n` (negative = left).
-  const slotShift = n => `calc((${cardWidth}) * ${n} + ${offset}px)`;
+  const slotShift = n => `calc((${cardWidth} + 4px) * ${n} + ${offset}px)`;
 
   return (
     <div style={{
@@ -380,11 +380,12 @@ export default function SwipeScreen({
                   pointerEvents: "none",
                 }}
               >
-                {/* Frameless — the card art sits clean on the dark background */}
+                {/* Frameless — a soft shadow lifts the card off the dark background */}
                 <div style={{
                   position: "relative", lineHeight: 0,
                   width: cardWidth,
                   height: cardHeight,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)",
                 }}>
                   {url && !(isCurrent && imgError) ? (
                     <img
@@ -398,6 +399,10 @@ export default function SwipeScreen({
                         height: "100%",
                         objectFit: "contain",
                         pointerEvents: "none",
+                        // Scan-accuracy mask for the rounded physical card
+                        // corners — matches the printed MTG corner ratio.
+                        borderRadius: "4.75% / 3.5%",
+                        overflow: "hidden",
                       }}
                     />
                   ) : (

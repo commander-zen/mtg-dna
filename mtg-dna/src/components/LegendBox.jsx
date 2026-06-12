@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { fetchCardByName, getCardImage } from "../lib/scryfall.js";
+import AddLegendSheet from "./AddLegendSheet";
 
 const DECK_GATE = 100;
 
@@ -17,24 +18,33 @@ export default function LegendBox({ onSelectLegend }) {
   const [legends, setLegends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [artByName, setArtByName] = useState({});
+  const [addOpen, setAddOpen] = useState(false);
 
   const dimColor   = mode === "light" ? theme.muted : theme.dim;
   const textColor  = mode === "light" ? theme.ink   : theme.white;
 
+  async function loadLegends() {
+    const { data, error } = await supabase
+      .from("legends")
+      .select("id, name, scryfall_id, image_uri, decks(id, status, deck_cards(quantity))")
+      .order("name");
+    if (!error) setLegends(data ?? []);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("legends")
-        .select("id, name, scryfall_id, image_uri, decks(id, status, deck_cards(quantity))")
-        .order("name");
-      if (!cancelled) {
-        if (!error) setLegends(data ?? []);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    loadLegends();
   }, []);
+
+  // Selecting a card in AddLegendSheet upserts it (no deck) and refreshes the grid.
+  async function handleAddLegend(card) {
+    await supabase
+      .from("legends")
+      .upsert({ name: card.name }, { onConflict: "name" });
+    setAddOpen(false);
+    setLoading(true);
+    await loadLegends();
+  }
 
   // Fetch art_crop for any legend missing a stored image_uri.
   useEffect(() => {
@@ -57,25 +67,24 @@ export default function LegendBox({ onSelectLegend }) {
 
   if (loading) return null;
 
-  if (legends.length === 0) {
-    return (
-      <div style={{
-        fontFamily: "'Noto Sans Mono', monospace",
-        fontSize: 12,
-        color: dimColor,
-        opacity: 0.6,
-      }}>
-        no legends yet
-      </div>
-    );
-  }
-
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
-      gap: 8,
-    }}>
+    <>
+      {legends.length === 0 && (
+        <div style={{
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          color: dimColor,
+          opacity: 0.6,
+          marginBottom: 8,
+        }}>
+          no legends yet
+        </div>
+      )}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 8,
+      }}>
       {legends.map(legend => {
         const highest = (legend.decks ?? []).reduce(
           (max, d) => Math.max(max, deckTotal(d)), 0
@@ -148,6 +157,47 @@ export default function LegendBox({ onSelectLegend }) {
           </button>
         );
       })}
-    </div>
+
+      <button
+        onClick={() => setAddOpen(true)}
+        style={{
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
+          width: "100%",
+          aspectRatio: "5 / 4",
+          padding: 0,
+          border: `1px dashed ${dimColor}`,
+          borderRadius: 0,
+          background: "transparent",
+          cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <span
+          className="material-symbols-rounded"
+          style={{ fontSize: 22, color: dimColor }}
+        >
+          add
+        </span>
+        <span style={{
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 10,
+          color: dimColor,
+        }}>
+          add legend
+        </span>
+      </button>
+      </div>
+
+      <AddLegendSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSelect={handleAddLegend}
+      />
+    </>
   );
 }

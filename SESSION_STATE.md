@@ -4,6 +4,14 @@
 Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save.
 
 ## Done
+- ✅ 2026-06-11 — True carousel track, no load fog (`f2ae4b6`):
+  - ✅ Replaced the fake card-back peek slivers with a real horizontally-translating track: prev/current/next are real card images, each `min(calc(100vw - 48px), 420px)` wide, slots spaced one card-width apart so neighbors overhang the screen edges by ~24px at rest
+  - ✅ `slotShift(n)` computes neighbor transforms from the same `cardWidth` calc as the current card, replacing the old fixed `92vw` spacing
+  - ✅ Vertical flick still lifts only the current card (`translateY(±110vh)`); track advances afterward via the existing `idx`/offset reset — unchanged behavior, just confirmed against the new track math
+  - ✅ Removed the 0.45 neighbor dimming — all slots render at full opacity except the outgoing current card during `animOut`
+  - ✅ Preload trimmed from next 4 → next 3 images (`idx+1` to `idx+3`)
+  - ✅ `browseNext`/`browsePrev` now offset by `getCardPx()` (`min(innerWidth - 48, 420)`) instead of `92vw`, matching the new slot spacing
+  - ✅ Build passes (431 kB)
 - ✅ 2026-06-11 — Peek slivers + Brew nav rework (`fc2fc46`, `5c4c6ca`):
   - ✅ Edge-peek slivers restyled as card backs: solid `#1a1208`, 1px inner border `rgba(200,150,12,0.35)` on the inward edge, widened to 20px
   - ✅ Card sizing changed to `min(calc(100vw - 56px), 420px)` (height follows at the same 1.4 aspect ratio, capped 70vh) so a 20px sliver + 8px gap fits on each side and is visible at rest, not just mid-drag

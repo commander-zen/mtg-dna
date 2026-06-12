@@ -346,11 +346,18 @@ export default function SwipeScreen({
     if (card?.card_faces?.length > 1) setFlipped(f => !f);
   });
 
-  // The card nearly fills the screen, capped so it doesn't balloon on
+  // Reserve space for the header block (back button + tally + stack info)
+  // and the bottom gesture legend — the card track centers in what's left.
+  const topReserve      = "calc(env(safe-area-inset-top) + 92px)";
+  const bottomReserve   = "calc(env(safe-area-inset-bottom) + 60px)";
+  const availableHeight = `calc(100vh - ${topReserve} - ${bottomReserve})`;
+
+  // The card fills the available vertical space (height-capped), width
+  // following the printed MTG aspect ratio, capped so it doesn't balloon on
   // tablets. Neighbor slots sit one card-width + 4px gap away, so cards
   // overhang the screen edges and almost touch — a tight carousel track.
-  const cardWidth  = "min(96vw, 440px)";
-  const cardHeight = "min(calc(96vw * 1.4), calc(440px * 1.4), 70vh)";
+  const cardHeight = `min(calc(96vw * 1.4), calc(440px * 1.4), ${availableHeight})`;
+  const cardWidth  = `min(96vw, 440px, calc(${cardHeight} / 1.4))`;
   // Horizontal distance from the current slot to slot `n` (negative = left).
   const slotShift = n => `calc((${cardWidth} + 4px) * ${n} + ${offset}px)`;
 
@@ -396,7 +403,8 @@ export default function SwipeScreen({
               <div
                 key={c.id ?? i}
                 style={{
-                  position: "absolute", inset: 0,
+                  position: "absolute",
+                  top: topReserve, bottom: bottomReserve, left: 0, right: 0,
                   transform,
                   transition: isCurrent ? currentTransition : stripTransition,
                   opacity: isCurrent && animOut ? 0 : 1,
@@ -404,12 +412,12 @@ export default function SwipeScreen({
                   pointerEvents: "none",
                 }}
               >
-                {/* Frameless — a soft shadow lifts the card off the dark background */}
+                {/* Frameless — a tight shadow lifts the card just off the background */}
                 <div style={{
                   position: "relative", lineHeight: 0,
                   width: cardWidth,
                   height: cardHeight,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
                 }}>
                   {url && !(isCurrent && imgError) ? (
                     <img
@@ -425,7 +433,7 @@ export default function SwipeScreen({
                         pointerEvents: "none",
                         // Scan-accuracy mask for the rounded physical card
                         // corners — matches the printed MTG corner ratio.
-                        borderRadius: "4.75% / 3.5%",
+                        borderRadius: "5.5% / 4%",
                         overflow: "hidden",
                       }}
                     />

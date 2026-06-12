@@ -486,10 +486,69 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Stack info strip (top) ── */}
+      {/* ── Persistent header — exit, legend anchor, running tally ── */}
       <div style={{
         position: "absolute",
         top: "env(safe-area-inset-top)",
+        left: 0, right: 0,
+        zIndex: 3,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "6px 8px",
+        background: "transparent",
+      }}>
+        <button
+          onClick={onGoToPile}
+          aria-label="Exit to review"
+          style={{
+            width: 40, height: 40,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "transparent", border: "none", padding: 0,
+            color: "rgba(255,255,255,0.7)",
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span
+            className="material-symbols-rounded"
+            style={{
+              fontSize: 22,
+              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
+            }}
+          >
+            arrow_back
+          </span>
+        </button>
+
+        <div style={{
+          fontFamily: "'Zilla Slab', serif",
+          fontSize: 14,
+          color: "rgba(255,255,255,0.8)",
+          letterSpacing: "0.02em",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          padding: "0 8px",
+          flex: 1,
+          textAlign: "center",
+        }}>
+          {commanderName ?? ""}
+        </div>
+
+        <div style={{
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          color: "var(--muted)",
+          padding: "0 8px",
+          flexShrink: 0,
+        }}>
+          {decklist.length} · {maybeboard.length}
+        </div>
+      </div>
+
+      {/* ── Stack info strip (top) ── */}
+      <div style={{
+        position: "absolute",
+        top: "calc(env(safe-area-inset-top) + 40px)",
         left: 0, right: 0,
         zIndex: 2,
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -538,7 +597,7 @@ export default function SwipeScreen({
       {sortMenuOpen && (
         <div style={{
           position: "absolute",
-          top: `calc(env(safe-area-inset-top) + 42px)`,
+          top: `calc(env(safe-area-inset-top) + 82px)`,
           right: 20, zIndex: 10,
           background: "#111",
           border: "1px solid rgba(255,255,255,0.1)",

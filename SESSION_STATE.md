@@ -1,9 +1,18 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save.
+Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save, including the new decided-cards-leave-queue + undo-restores-position behavior on a live deck.
 
 ## Done
+- ✅ 2026-06-11 — Brew queue: decided cards leave carousel, larger cards w/ shadow + corner mask (`f7cf828`, `81a8954`):
+  - ✅ Card size bumped to `min(96vw, 440px)` wide (was `min(calc(100vw-48px),420px)`); slot spacing is now `cardWidth + 4px` so neighbors nearly touch; `getCardPx()` updated to match for browse-animation offsets
+  - ✅ Each card lifted off the background with `box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)` — no frame/border added
+  - ✅ Card image gets a `border-radius: 4.75% / 3.5%` scan-accuracy mask (printed MTG corner ratio) — scoped to the `<img>` only, no other element gets a radius
+  - ✅ `effectiveCards` now excludes any card whose `oracle_id` is in `pile`, `decklist`, or `maybeboard` (`decidedIds` memo) — decided cards leave the carousel entirely and never reappear when browsing back
+  - ✅ `doMaybe`/`doDecklist` no longer increment `idx`; instead clamp `idx` to `effectiveCards.length - 2` so the track centers the next card (or new last card, if the decided card was last)
+  - ✅ `doUndo` now records `pendingRestoreRef` (oracle_id); a new effect watches `effectiveCards` and jumps `idx` to the restored card's position once it reappears — restores both position and pile membership
+  - ✅ "N IN STACK" count (`effectiveCards.length - idx`) now correctly reflects undecided cards only, since decided cards are excluded from `effectiveCards`
+  - ✅ Build passes (432 kB)
 - ✅ 2026-06-11 — True carousel track, no load fog (`f2ae4b6`):
   - ✅ Replaced the fake card-back peek slivers with a real horizontally-translating track: prev/current/next are real card images, each `min(calc(100vw - 48px), 420px)` wide, slots spaced one card-width apart so neighbors overhang the screen edges by ~24px at rest
   - ✅ `slotShift(n)` computes neighbor transforms from the same `cardWidth` calc as the current card, replacing the old fixed `92vw` spacing

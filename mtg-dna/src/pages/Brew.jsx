@@ -560,29 +560,66 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     t.action === "brew-search" ? { ...t, onClick: () => setBrewView("modes") } : t
   );
 
-  if (brewView !== "shell") {
-    // A session launched from the Loki dev seed has no real search to return
-    // to — its "back" is the mode/seed screen instead.
-    const isLokiSession = sessionLabel === LOKI_SESSION_LABEL;
-    // A legend-attached session skips straight to swipe with an auto-seeded
-    // queue, so "back" from swipe exits the session (returns to
-    // LegendIdentity). The in-swipe search affordance only re-seeds the
-    // queue, so "back" from that search returns to swipe rather than exiting.
-    const backTarget = brewView === "modes" ? "shell"
-      : brewView === "search" ? (session ? "swipe" : "modes")
-      : brewView === "swipe" ? (session ? null : (isLokiSession ? "modes" : "search"))
-      : brewView === "review" ? (reviewOrigin === "legend" ? null : "swipe")
-      : "swipe";
+  // ── Back ladder ──────────────────────────────────────────────────────────
+  // One rung at a time, the Box surface is the root:
+  //   Box surface → brew carousel → (search | review)
+  //   Box surface → deck view (review opened from the deck row)
+  // A legend-attached session skips straight to swipe with an auto-seeded
+  // queue, so "back" from swipe exits to the Box surface. The in-swipe search
+  // affordance only re-seeds, so its "back" returns to swipe. Review reached
+  // from the deck row exits to the Box surface (the legend, pinned last-active,
+  // is the surface's top block); review reached from the swipe tally returns to
+  // swipe. The Loki dev seed has no real search, so its "back" is the modes
+  // screen. null = exit the session (resetBrew + onSessionDone).
+  const isLokiSession = sessionLabel === LOKI_SESSION_LABEL;
+  const inOverlay = brewView !== "shell" || !!session;
+  const backTarget =
+      brewView === "shell"  ? null
+    : brewView === "modes"  ? "shell"
+    : brewView === "search" ? (session ? "swipe" : "modes")
+    : brewView === "swipe"  ? (session ? null : (isLokiSession ? "modes" : "search"))
+    : brewView === "review" ? (reviewOrigin === "legend" ? null : "swipe")
+    : "swipe";
 
-    function handleBack() {
-      if (backTarget === null) {
-        resetBrew();
-        onSessionDone?.();
-      } else {
-        setBrewView(backTarget);
-      }
+  function handleBack() {
+    if (backTarget === null || backTarget === undefined) {
+      resetBrew();
+      onSessionDone?.();
+    } else {
+      setBrewView(backTarget);
     }
+  }
 
+  // Hardware/browser Back must behave identically to the in-app chevron. While
+  // the takeover is open we trap one synthetic history entry and route every
+  // Back — hardware or chevron (via goBack → history.back) — through the same
+  // handleBack ladder, re-arming the trap until handleBack exits the session.
+  const backTargetRef = useRef(backTarget);
+  backTargetRef.current = backTarget;
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+
+  useEffect(() => {
+    if (!inOverlay) return;
+    window.history.pushState({ magicdexBrew: true }, "");
+    const onPop = () => {
+      const exiting = backTargetRef.current === null || backTargetRef.current === undefined;
+      handleBackRef.current();
+      // Climbing a rung consumes the trap entry — re-arm so the next Back keeps
+      // climbing. Exiting must not re-arm, leaving the launcher entry on top.
+      if (!exiting) window.history.pushState({ magicdexBrew: true }, "");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [inOverlay]);
+
+  // The chevron routes through the same history Back the hardware button uses.
+  function goBack() {
+    if (inOverlay) window.history.back();
+    else handleBack();
+  }
+
+  if (brewView !== "shell") {
     return (
       <div style={{
         position: "fixed",
@@ -595,7 +632,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       }}>
         {brewView !== "swipe" && (
           <button
-            onClick={handleBack}
+            onClick={goBack}
             aria-label="Back"
             style={{
               position: "fixed",
@@ -659,7 +696,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => { setReviewOrigin("swipe"); setBrewView("review"); }}
-            onExit={handleBack}
+            onExit={goBack}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
             commanderCard={sessionLabel ? { name: sessionLabel } : null}

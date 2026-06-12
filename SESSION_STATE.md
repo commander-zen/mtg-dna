@@ -1,9 +1,22 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form, Brew save, or the new LegendBox/AddLegendSheet flow will work in prod (legends.upsert calls are unverified live). After that: end-to-end test of Home → LegendBox grid (100-card gate) → LegendIdentity → brew verb → AddLegendSheet "add legend" flow on a live deck/device, decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen).
+Priority: **RUN THE MIGRATIONS** — `mtg-dna/supabase/migrations/002_legends.sql` AND the new `003_legend_identity.sql` (adds `type_line`/`oracle_text`/`mana_cost` to `legends`) must both be run manually in the Supabase SQL editor before the Vault form, Brew save, LegendBox/AddLegendSheet flow, or the identity-backfill writes will work in prod (all legends.upsert/update calls are unverified live). After that: end-to-end test of Home → LegendBox grid (100-card gate, identity backfill, brightness-lifted gated art) → LegendIdentity → brew verb (attached-deck session) → AddLegendSheet "add legend" flow on a live deck/device, decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen).
 
 ## Done
+- ✅ 2026-06-11 — Legends: lazy Scryfall backfill for rows missing identity, gated art brightness lift (`7fa18ef`):
+  - ✅ New `supabase/migrations/003_legend_identity.sql` — adds `type_line`, `oracle_text`, `mana_cost` to `legends` (not yet run, see Cold Start Prompt)
+  - ✅ New `fetchCardIdentity(name)` in scryfall.js — exact `named?exact=` lookup, falling back to `named?fuzzy=`, returns `null` (no throw) on no match
+  - ✅ LegendBox backfills any legend missing `image_uri`/`type_line` once per row (ref-tracked, no repeat on re-render), persisting `scryfall_id`/`image_uri`(art_crop)/`type_line`/`oracle_text`/`mana_cost`; rows Scryfall can't match render a flat ink-colored block + name, no error/retry
+  - ✅ Brew's save path attempts the same identity lookup for newly-upserted legends (typed, not picked), best-effort/non-blocking
+  - ✅ Gated (grayscale) art gets `brightness(1.45) contrast(0.95)` in dark mode (plain grayscale in light mode) — applied to LegendBox tiles and LegendIdentity hero art
+  - ✅ Build passes (442.49 kB)
+- ✅ 2026-06-11 — LegendIdentity: brew verb launches session attached to legend's deck (`35bc9ef`):
+  - ✅ App.jsx lifts `selectedLegend` and a `brewSession {legend, deckId}` so Home ↔ Brew tab switches preserve identity-view state
+  - ✅ "brew" verb sets `brewSession`, switches to the Brew tab, skips commander selection, and lands on the search screen with `sessionLabel` = legend name (label preserved across `runSearch` instead of resetting to null)
+  - ✅ If the legend has an in-progress deck (<100 cards), its `deck_cards` rows are fetched on launch; on save they're merged by `card_name + section` with newly-swiped cards and the deck's rows are replaced (delete + reinsert) — updates the existing deck instead of creating a duplicate
+  - ✅ Back from the search screen (or a successful save) calls `onSessionDone`, returning to Home/LegendIdentity; LegendIdentity now re-fetches its legend's `decks` on mount so counts are fresh
+  - ✅ Build passes (441.24 kB)
 - ✅ 2026-06-11 — Box: add legend via Scryfall search, lands grayscale at 0/100 (`2b20281`):
   - ✅ New `src/components/AddLegendSheet.jsx` — theme-token bottom sheet (not Win98-bevel CommanderSearchSheet, whose chrome matches Brew's retro look, not Home's flat aesthetic), 300ms-debounced `searchCommanders` query, borderless name/type_line result rows
   - ✅ LegendBox grid gets a final dashed-border "add legend" tile (Material Symbols `add` glyph) after all legend tiles, same tile size

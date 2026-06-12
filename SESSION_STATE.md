@@ -1,9 +1,16 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save, including the new decided-cards-leave-queue + undo-restores-position behavior on a live deck.
+Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save, including the new decided-cards-leave-queue + undo-restores-position behavior and the vertically-centered card track on a live deck/device.
 
 ## Done
+- ✅ 2026-06-11 — SwipeScreen: tighter shadow, full corner mask, vertically centered card (`faa9ac5`):
+  - ✅ box-shadow replaced with a tight `0 2px 8px rgba(0,0,0,0.5)` — the large soft halo (`0 8px 24px ...`) made the card read as sitting in a tray; separation now comes mostly from corners + motion
+  - ✅ Card image `border-radius` increased from `4.75% / 3.5%` to `5.5% / 4%` to fully mask the white scan corners — image element only, no other element gets a radius
+  - ✅ New `topReserve`/`bottomReserve`/`availableHeight` constants reserve space for the header block (~92px) and bottom gesture legend (~60px); each carousel slot now spans that band (`top`/`bottom` instead of `inset:0`) with flex centering, so the card track sits vertically centered between header and bottom nav instead of top-aligned
+  - ✅ `cardHeight` now height-caps to `availableHeight` (in addition to the existing `96vw*1.4`/`440px*1.4` caps); `cardWidth` derives from `cardHeight / 1.4` (capped at `96vw`/`440px`) so the card grows to fill available vertical space at the correct aspect ratio rather than leaving margins
+  - ✅ Gestures, thresholds, track logic untouched
+  - ✅ Build passes (432.10 kB)
 - ✅ 2026-06-11 — Brew queue: decided cards leave carousel, larger cards w/ shadow + corner mask (`f7cf828`, `81a8954`):
   - ✅ Card size bumped to `min(96vw, 440px)` wide (was `min(calc(100vw-48px),420px)`); slot spacing is now `cardWidth + 4px` so neighbors nearly touch; `getCardPx()` updated to match for browse-animation offsets
   - ✅ Each card lifted off the background with `box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)` — no frame/border added

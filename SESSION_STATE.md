@@ -4,6 +4,14 @@
 Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save.
 
 ## Done
+- ✅ 2026-06-11 — Peek slivers + Brew nav rework (`fc2fc46`, `5c4c6ca`):
+  - ✅ Edge-peek slivers restyled as card backs: solid `#1a1208`, 1px inner border `rgba(200,150,12,0.35)` on the inward edge, widened to 20px
+  - ✅ Card sizing changed to `min(calc(100vw - 56px), 420px)` (height follows at the same 1.4 aspect ratio, capped 70vh) so a 20px sliver + 8px gap fits on each side and is visible at rest, not just mid-drag
+  - ✅ Header back chevron now calls a new `onExit` prop instead of `onGoToPile`; in Brew.jsx it routes to `"search"`, or to `"modes"` (the seed screen) if `sessionLabel === LOKI_SESSION_LABEL` — swipe state (index/decklist/maybeboard) is preserved either way
+  - ✅ Header tally (`12 · 7`) is now a 44px-min-height button with an underline + chevron-right affordance; tapping it opens REVIEW via the existing `onGoToPile`
+  - ✅ Brew.jsx's separate floating back button is now suppressed for `brewView === "swipe"` (SwipeScreen's own header chevron replaces it); still rendered for modes/search/review
+  - ✅ Review → swipe still resumes at `swipeIndex` via existing `backTarget`/`initialIndex` plumbing — unchanged
+  - ✅ Build passes (432 kB)
 - ✅ 2026-06-11 — SwipeScreen card sizing, edge peek, persistent header (`ee0d310`, `26089df`):
   - ✅ Centered card now dominates: `min(92vw, 420px)` wide, height `min(calc(92vw*1.4), calc(420px*1.4), 70vh)`, replacing the old 88vw/62vh sizing
   - ✅ Edge-peek slivers (16px, `var(--color-surface)`) at left/right screen edges when a prev/next card exists; track the horizontal drag offset with `stripTransition`
@@ -66,6 +74,7 @@ Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql
 - ✅ 2026-06-10 — GRAVEYARD.md added at repo root: prototype consolidation record (deck-stack donor, pod-check / life-track / gold-fish / after-school-special sealed)
 
 ## Known Issues
+- **Commit boundary slip (2026-06-11)**: the header nav changes (`onExit` prop, tally button) landed in `fc2fc46` ("peek slivers") rather than `5c4c6ca` ("Brew nav") since both edits hit SwipeScreen.jsx before the first commit. No functional issue — just noting the split doesn't match the two commit messages exactly.
 - **Pile is now gesture-unreachable (2026-06-11)**: with horizontal repurposed to browsing, nothing routes cards to the pile anymore. Review screen, save flow, done-state counts, and ReviewScreen's pile group still reference it (will just be empty). Decide whether pile goes away or gets a new affordance.
 - **"X KEPT" done-state label**: top strip still reports `pile.length` as KEPT when the stack is exhausted — stale wording now that keep/pass is gone.
 - **Vault reverted to shell (2026-06-10)**: per request, Vault.jsx is back to the bare PageHeader + ToolChips state (`b63d5cd^` / e968083, byte-identical). The commander+build registry form from `b63d5cd` is gone again — recover it from that commit if wanted. `lib/fetchDecklist.js` is now unused by any page.

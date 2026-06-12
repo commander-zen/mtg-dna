@@ -41,9 +41,18 @@ export default function SwipeScreen({
   activeDeckId, onSavePile,
   onDoubleTag,
 }) {
+  // Cards already sorted into a pile/decklist/maybeboard leave the carousel
+  // entirely — decided cards never reappear when browsing back.
+  const decidedIds = useMemo(() => {
+    const ids = new Set();
+    for (const c of pile)       if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
+    for (const c of decklist)   if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
+    for (const c of maybeboard) if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
+    return ids;
+  }, [pile, decklist, maybeboard]);
+
   const effectiveCards = useMemo(() => {
-    const pileIds = new Set(pile.filter(c => !isStackable(c) && c.oracle_id).map(c => c.oracle_id));
-    const seen = new Set(pileIds);
+    const seen = new Set(decidedIds);
     const result = [];
     for (const c of cards) {
       if (isStackable(c)) { result.push(c); continue; }
@@ -52,7 +61,7 @@ export default function SwipeScreen({
       result.push(c);
     }
     return result;
-  }, [cards, pile]);
+  }, [cards, decidedIds]);
 
   const [idx,          setIdx]          = useState(initialIndex ?? 0);
   const [history,      setHistory]      = useState([]);
@@ -70,12 +79,13 @@ export default function SwipeScreen({
   const dragStartRef      = useRef(null);
   const saveTimerRef      = useRef(null);
   const longPressTimerRef = useRef(null);
+  const pendingRestoreRef = useRef(null);   // oracle_id awaiting re-insertion after undo
   const axisRef           = useRef(null);   // "x" | "y" once locked, null before
   const velRef            = useRef({ vx: 0, vy: 0 });
   const lastSampleRef     = useRef(null);
 
   const card = effectiveCards[idx] ?? null;
-  const done = idx >= effectiveCards.length;
+  const done = effectiveCards.length === 0 || idx >= effectiveCards.length;
 
   // Inject game-changer glow keyframe once into document head
   useEffect(() => {
@@ -168,7 +178,9 @@ export default function SwipeScreen({
       const cardEntry = { ...card, instanceId: crypto.randomUUID() };
       setHistory(h => [...h, { card: cardEntry, kept: false, maybe: true }]);
       onMaybeboardChange(prev => [...prev, cardEntry]);
-      setIdx(i => i + 1);
+      // The card leaves the queue entirely — clamp idx so the track
+      // centers the next card (or the new last card, if this was it).
+      setIdx(i => Math.max(0, Math.min(i, effectiveCards.length - 2)));
       setOffset(0); setOffsetY(0); setAnimOut(null);
     }, 260);
   }
@@ -182,7 +194,7 @@ export default function SwipeScreen({
       const cardEntry = { ...card, instanceId: crypto.randomUUID() };
       setHistory(h => [...h, { card: cardEntry, kept: false, maybe: false, decklist: true }]);
       onDecklistChange?.(prev => [...prev, cardEntry]);
-      setIdx(i => i + 1);
+      setIdx(i => Math.max(0, Math.min(i, effectiveCards.length - 2)));
       setOffset(0); setOffsetY(0); setAnimOut(null);
     }, 285);
   }
@@ -198,9 +210,21 @@ export default function SwipeScreen({
     } else if (last.decklist) {
       onDecklistChange?.(prev => prev.filter(c => c.instanceId !== last.card.instanceId));
     }
-    setIdx(i => Math.max(0, i - 1));
+    // Removing the id from its pile re-inserts the card into effectiveCards
+    // at its original position; once that happens, jump idx to it.
+    pendingRestoreRef.current = last.card.oracle_id ?? last.card.id;
     haptic([4, 20, 4]);
   }
+
+  // Restore the carousel position of an undone card once it reappears
+  // in effectiveCards (after its id is removed from decklist/maybeboard/pile).
+  useEffect(() => {
+    const oid = pendingRestoreRef.current;
+    if (!oid) return;
+    const i = effectiveCards.findIndex(c => (c.oracle_id ?? c.id) === oid);
+    if (i !== -1) setIdx(i);
+    pendingRestoreRef.current = null;
+  }, [effectiveCards]);
 
   // ── Pointer events ───────────────────────────────────────────────────────────
 

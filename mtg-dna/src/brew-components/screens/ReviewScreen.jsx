@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-const NAV_HEIGHT = 60;
+// Spine screens pad for the notch (top, clearing the back chevron) and the
+// home indicator (bottom) now that no tab bar absorbs the bottom.
+const SAFE_TOP    = "calc(env(safe-area-inset-top) + 56px)";
+const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 
 // Review the accumulated swipe results before saving. Purely presentational —
 // the Supabase writes live in the page that owns the brew state (Brew.jsx),
@@ -60,12 +63,12 @@ export default function ReviewScreen({
       flexDirection: "column",
       alignItems: "center",
       overflowY: "auto",
-      paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
+      paddingBottom: SAFE_BOTTOM,
     }}>
       <div style={{
         width: "100%",
         maxWidth: 430,
-        padding: "64px 20px 40px",
+        padding: `${SAFE_TOP} 20px 40px`,
         display: "flex",
         flexDirection: "column",
         gap: 20,

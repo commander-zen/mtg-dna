@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
-import PageHeader from "../components/PageHeader";
 import LegendBox from "../components/LegendBox";
 import LegendIdentity from "../components/LegendIdentity";
 import SettingsSheet from "../components/SettingsSheet";
@@ -17,7 +16,16 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
   const [activeLegend, setActiveLegend] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const glyphColor = mode === "light" ? `${theme.ink}80` : `${theme.white}80`;
+  const glyphColor   = mode === "light" ? `${theme.ink}80` : `${theme.white}80`;
+  const eyebrowColor = mode === "light" ? theme.muted : theme.dim;
+  const titleColor   = mode === "light" ? theme.ink   : theme.white;
+  const ruleColor    = mode === "light" ? theme.gold  : theme.amber;
+
+  // Full-bleed art handles the notch when a legend is on top; without it the
+  // wordmark must clear the notch itself. Both clear the home indicator.
+  const contentPad = activeLegend
+    ? "28px 20px calc(env(safe-area-inset-bottom) + 40px)"
+    : "calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 40px)";
 
   // Pick the top block on every load: keep the current legend if it survived
   // the reload, else the persisted last-active, else the first in the Box.
@@ -94,8 +102,34 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
       )}
 
       {/* Below: the full Box grid (+ add-legend tile) */}
-      <div style={{ padding: "28px 20px 40px" }}>
-        <PageHeader eyebrow="Helix" title="home" />
+      <div style={{ padding: contentPad }}>
+        {/* Wordmark — "magıcdex" with a dotless i (U+0131): lowercase, dot
+            removed, to evoke "dex". Zilla Slab, the title treatment. "Helix"
+            eyebrow retained for now; trivial to drop. */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: eyebrowColor,
+            marginBottom: 4,
+          }}>
+            Helix
+          </div>
+          <div style={{
+            fontFamily: "'Zilla Slab', serif",
+            fontSize: 28,
+            fontWeight: 400,
+            letterSpacing: "0.01em",
+            color: titleColor,
+            lineHeight: 1.1,
+          }}>
+            mag&#x0131;cdex
+          </div>
+          <div style={{ width: 32, height: 1, background: ruleColor, marginTop: 10 }} />
+        </div>
         <LegendBox
           onSelectLegend={selectLegend}
           onLegendsLoaded={handleLegendsLoaded}

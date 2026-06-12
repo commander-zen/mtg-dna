@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-const NAV_HEIGHT = 60;
 import { getSettings } from "../../lib/settings.js";
+
+// Spine screens pad for the notch (top) and home indicator (bottom) now that
+// no tab bar absorbs the bottom. The back chevron lives at the top-left inset.
+const SAFE_TOP    = "calc(env(safe-area-inset-top) + 56px)";
+const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 
 const HISTORY_KEY = "helixbrew_search_history";
 function readHistory() {
@@ -123,7 +127,8 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
+      paddingTop: SAFE_TOP,
+      paddingBottom: SAFE_BOTTOM,
       overflowY: "auto",
     }}>
       <div style={{
@@ -133,7 +138,7 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
         display: "flex",
         flexDirection: "column",
         flex: 1,
-        minHeight: `calc(100dvh - ${NAV_HEIGHT}px - env(safe-area-inset-bottom))`,
+        minHeight: `calc(100dvh - ${SAFE_TOP} - ${SAFE_BOTTOM})`,
       }}>
 
         {/* ── Spacer ── */}

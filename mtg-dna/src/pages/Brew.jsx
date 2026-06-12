@@ -636,7 +636,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             aria-label="Back"
             style={{
               position: "fixed",
-              top: 10, left: 10,
+              top: "calc(env(safe-area-inset-top) + 10px)",
+              left: "calc(env(safe-area-inset-left) + 10px)",
               zIndex: 51,
               width: 44,
               height: 44,

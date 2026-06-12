@@ -81,6 +81,27 @@ export async function fetchCardByName(name, options = {}) {
   return res.json();
 }
 
+// ── Identity backfill — exact match, then fuzzy; null (not throw) if nothing matches ──
+export async function fetchCardIdentity(name, options = {}) {
+  try {
+    const exact = await fetch(
+      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`,
+      { headers: { "User-Agent": UA }, signal: options.signal }
+    );
+    if (exact.ok) return exact.json();
+    if (exact.status !== 404) return null;
+
+    const fuzzy = await fetch(
+      `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`,
+      { headers: { "User-Agent": UA }, signal: options.signal }
+    );
+    if (!fuzzy.ok) return null;
+    return fuzzy.json();
+  } catch {
+    return null;
+  }
+}
+
 // ── Single page fetch ─────────────────────────────────────────────────────────
 export async function fetchFirstPage(query, options = {}) {
   const { signal } = options;

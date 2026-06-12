@@ -6,7 +6,7 @@ import { BREW_TOOLS } from "../data/tools";
 import SearchScreen from "../brew-components/screens/SearchScreen.jsx";
 import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
-import { fetchFirstPageForSwipe, LOKI_CLONE_QUERY } from "../lib/scryfall.js";
+import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, LOKI_CLONE_QUERY } from "../lib/scryfall.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -332,6 +332,25 @@ export default function Brew({ session, onSessionDone }) {
           .select()
           .single();
         if (legendError) throw legendError;
+
+        // The legend may have been typed rather than picked from a Scryfall
+        // list — attempt to heal its identity now so the Box tile arrives
+        // with art/oracle data already attached. Best-effort: failures here
+        // shouldn't block the save.
+        if (!legend.image_uri || !legend.type_line) {
+          try {
+            const card = await fetchCardIdentity(commanderName);
+            if (card) {
+              await supabase.from("legends").update({
+                scryfall_id: card.id,
+                image_uri: getCardImage(card, "art_crop"),
+                type_line: card.type_line ?? null,
+                oracle_text: card.oracle_text ?? card.card_faces?.[0]?.oracle_text ?? null,
+                mana_cost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? null,
+              }).eq("id", legend.id);
+            }
+          } catch { /* best-effort identity backfill */ }
+        }
 
         const { data: deck, error: deckError } = await supabase
           .from("decks")

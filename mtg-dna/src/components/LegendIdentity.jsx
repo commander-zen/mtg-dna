@@ -96,7 +96,7 @@ export default function LegendIdentity({ legend, onBack, onBrew }) {
             style={{
               width: "100%", height: "100%",
               objectFit: "cover",
-              filter: gated ? "grayscale(1)" : "none",
+              filter: gated ? (mode === "dark" ? "grayscale(1) brightness(1.45) contrast(0.95)" : "grayscale(1)") : "none",
             }}
           />
         )}

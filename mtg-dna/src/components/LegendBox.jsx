@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase";
-import { fetchCardByName, getCardImage } from "../lib/scryfall.js";
+import { fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import AddLegendSheet from "./AddLegendSheet";
 
 const DECK_GATE = 100;
+
+// Gated (grayscale) art reads as a near-dead screen in dark mode without a
+// brightness lift; scoped to dark since the lift glows oddly on light paper.
+const GATED_FILTER = {
+  dark:  "grayscale(1) brightness(1.45) contrast(0.95)",
+  light: "grayscale(1)",
+};
 
 // A deck's total = sum of deck_cards quantities + 1 for the commander
 // (the commander itself is never written to deck_cards).
@@ -17,16 +24,18 @@ export default function LegendBox({ onSelectLegend }) {
   const { theme, mode } = useTheme();
   const [legends, setLegends] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [artByName, setArtByName] = useState({});
+  const [identityFailed, setIdentityFailed] = useState(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const attemptedRef = useRef(new Set());
 
   const dimColor   = mode === "light" ? theme.muted : theme.dim;
   const textColor  = mode === "light" ? theme.ink   : theme.white;
+  const gatedFilter = mode === "dark" ? GATED_FILTER.dark : GATED_FILTER.light;
 
   async function loadLegends() {
     const { data, error } = await supabase
       .from("legends")
-      .select("id, name, scryfall_id, image_uri, decks(id, status, deck_cards(quantity))")
+      .select("id, name, scryfall_id, image_uri, type_line, decks(id, status, deck_cards(quantity))")
       .order("name");
     if (!error) setLegends(data ?? []);
     setLoading(false);
@@ -46,24 +55,39 @@ export default function LegendBox({ onSelectLegend }) {
     await loadLegends();
   }
 
-  // Fetch art_crop for any legend missing a stored image_uri.
+  // Lazily heal legends saved without Scryfall identity (no art_crop/oracle
+  // data) — one lookup per legend, persisted onto the legends row so it
+  // doesn't repeat on future loads.
   useEffect(() => {
-    const missing = legends.filter(l => !l.image_uri && !artByName[l.name]);
+    const missing = legends.filter(l =>
+      !attemptedRef.current.has(l.id) && (!l.image_uri || !l.type_line)
+    );
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
       for (const legend of missing) {
-        try {
-          const card = await fetchCardByName(legend.name);
-          const art = getCardImage(card, "art_crop");
-          if (!cancelled && art) {
-            setArtByName(prev => ({ ...prev, [legend.name]: art }));
-          }
-        } catch { /* skip on lookup failure */ }
+        attemptedRef.current.add(legend.id);
+        const card = await fetchCardIdentity(legend.name);
+        if (cancelled) return;
+        if (!card) {
+          setIdentityFailed(prev => new Set(prev).add(legend.id));
+          continue;
+        }
+        const patch = {
+          scryfall_id: card.id,
+          image_uri: getCardImage(card, "art_crop"),
+          type_line: card.type_line ?? null,
+          oracle_text: card.oracle_text ?? card.card_faces?.[0]?.oracle_text ?? null,
+          mana_cost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? null,
+        };
+        await supabase.from("legends").update(patch).eq("id", legend.id);
+        if (!cancelled) {
+          setLegends(prev => prev.map(l => l.id === legend.id ? { ...l, ...patch } : l));
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [legends, artByName]);
+  }, [legends]);
 
   if (loading) return null;
 
@@ -90,7 +114,8 @@ export default function LegendBox({ onSelectLegend }) {
           (max, d) => Math.max(max, deckTotal(d)), 0
         );
         const gated = highest < DECK_GATE;
-        const art = legend.image_uri || artByName[legend.name];
+        const art = legend.image_uri;
+        const noIdentity = !art && identityFailed.has(legend.id);
 
         return (
           <button
@@ -119,11 +144,14 @@ export default function LegendBox({ onSelectLegend }) {
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover",
-                  filter: gated ? "grayscale(1)" : "none",
+                  filter: gated ? gatedFilter : "none",
                 }}
               />
             ) : (
-              <div style={{ position: "absolute", inset: 0, background: theme.border }} />
+              <div style={{
+                position: "absolute", inset: 0,
+                background: noIdentity ? textColor : theme.border,
+              }} />
             )}
 
             {gated && (

@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js";
 import { fetchCardByName, getCardImage, formatManaCost } from "../lib/scryfall.js";
 
 const DECK_GATE = 100;
+const NAV_HEIGHT = 60;
 
 // A deck's total = sum of deck_cards quantities + 1 for the commander
 // (the commander itself is never written to deck_cards).
@@ -103,7 +104,7 @@ export default function LegendIdentity({ legend, onBack, onBrew }) {
         )}
       </div>
 
-      <div style={{ padding: "20px 20px 40px" }}>
+      <div style={{ padding: "20px 20px 40px", paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 40px)` }}>
         {/* Name block */}
         <div style={{ marginBottom: 32 }}>
           {typeLine && (

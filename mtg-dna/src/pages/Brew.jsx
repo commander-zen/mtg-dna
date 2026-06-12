@@ -201,6 +201,14 @@ function expandRows(rows, section) {
   return result;
 }
 
+// Every Scryfall query issued during a session — auto-seed or in-session
+// search — is constrained to the legend's color identity server-side of
+// whatever the user typed, so illegal cards can never surface.
+function withColorIdentity(q, colorIdentity) {
+  const ci = colorIdentity?.length ? colorIdentity.join("").toLowerCase() : "c";
+  return `${q} legal:commander ci<=${ci}`.trim();
+}
+
 // Collapse instances to (card_name, section) rows with quantities for deck_cards.
 function buildCardRows(deckId, boards) {
   const rows = [];
@@ -241,6 +249,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // optionally attaching to that legend's in-progress deck.
   const [attachDeckId, setAttachDeckId]       = useState(null);
   const [existingCardRows, setExistingCardRows] = useState([]);
+  const [legendColorIdentity, setLegendColorIdentity] = useState(null);
 
   const writeQueueRef = useRef([]);
   const flushingRef   = useRef(false);
@@ -294,6 +303,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
         }
       }
       if (cancelled) return;
+      setLegendColorIdentity(colorIdentity);
 
       // Deck row is a door: opening a deck from LegendIdentity lands directly
       // on its live review, not the swipe carousel. The queue still seeds in
@@ -316,15 +326,15 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setLoading(true);
     setError(null);
     try {
-      const ci = colorIdentity?.length ? colorIdentity.join("").toLowerCase() : "c";
-      const q = `legal:commander ci<=${ci} -t:land`;
+      const rawQuery = "-t:land";
+      const q = withColorIdentity(rawQuery, colorIdentity);
       const { cards } = await fetchFirstPageForSwipe(q, null, { order: "edhrec" });
       if (!cards.length) throw new Error("No cards found for that query.");
       // Exclude every card already in the deck, on either board — recomputed
       // from live deck_cards on every entry, not just the session that first
       // seeded the queue.
       const exclude = new Set(excludeRows.map(r => r.card_name));
-      setQuery(q);
+      setQuery(rawQuery);
       setSwipeCards(cards.filter(c => !exclude.has(c.name)));
       setSwipeIndex(0);
       if (setView) setBrewView("swipe");
@@ -435,7 +445,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setLoading(true);
     setError(null);
     try {
-      const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
+      // In a legend-attached session, every typed query is constrained to the
+      // legend's color identity server-side — the user's input is never
+      // trusted alone, matching the auto-seed path above.
+      const finalQuery = session ? withColorIdentity(q, legendColorIdentity) : q;
+      const { cards } = await fetchFirstPageForSwipe(finalQuery, null, { order, dir });
       if (!cards.length) throw new Error("No cards found for that query.");
       setQuery(q);
       setSessionLabel(label !== undefined ? label : sessionLabel);

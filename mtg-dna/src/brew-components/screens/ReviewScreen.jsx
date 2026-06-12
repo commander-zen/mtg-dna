@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const NAV_HEIGHT = 60;
+
 // Review the accumulated swipe results before saving. Purely presentational —
 // the Supabase writes live in the page that owns the brew state (Brew.jsx),
 // keeping brew-components free of db imports.
@@ -58,6 +60,7 @@ export default function ReviewScreen({
       flexDirection: "column",
       alignItems: "center",
       overflowY: "auto",
+      paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
     }}>
       <div style={{
         width: "100%",

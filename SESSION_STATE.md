@@ -1,9 +1,27 @@
 # SESSION_STATE — MTG DNA
 
 ## Cold Start Prompt
-Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form or Brew save will work. After that: decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen), then end-to-end test of search → swipe → review → save, including the new decided-cards-leave-queue + undo-restores-position behavior and the vertically-centered card track on a live deck/device.
+Priority: **RUN THE MIGRATION** — `mtg-dna/supabase/migrations/002_legends.sql` must be run manually in the Supabase SQL editor before the Vault form, Brew save, or the new LegendBox/AddLegendSheet flow will work in prod (legends.upsert calls are unverified live). After that: end-to-end test of Home → LegendBox grid (100-card gate) → LegendIdentity → brew verb → AddLegendSheet "add legend" flow on a live deck/device, decide the pile's fate (carousel gesture model made it unreachable — see Known Issues), wire mode-specific behavior in Brew (`brewMode` is stored but all four modes route to the same search screen).
 
 ## Done
+- ✅ 2026-06-11 — Box: add legend via Scryfall search, lands grayscale at 0/100 (`2b20281`):
+  - ✅ New `src/components/AddLegendSheet.jsx` — theme-token bottom sheet (not Win98-bevel CommanderSearchSheet, whose chrome matches Brew's retro look, not Home's flat aesthetic), 300ms-debounced `searchCommanders` query, borderless name/type_line result rows
+  - ✅ LegendBox grid gets a final dashed-border "add legend" tile (Material Symbols `add` glyph) after all legend tiles, same tile size
+  - ✅ Selecting a result upserts `{name}` into `legends` (onConflict "name", no deck created), closes the sheet, and reloads the grid via new `loadLegends()` helper — new legend lands grayscale at 0/100
+  - ✅ Build passes (439.87 kB)
+- ✅ 2026-06-11 — LegendIdentity: art, oracle, decks, brew verb (`df36b4a`):
+  - ✅ New `src/components/LegendIdentity.jsx` — full-screen takeover (same fixed/inset/zIndex pattern as Brew), back chevron returns to Home's Box
+  - ✅ Art (full-width, grayscale if gated), lowercase type_line eyebrow + Zilla Slab name + 32x1px gold/amber rule, oracle text (Noto Sans) + mana cost (Noto Sans Mono)
+  - ✅ Decks list as borderless content-rows: name, "N/100" (gold "100" when complete), status, dimmed chevron
+  - ✅ "brew" text verb calls `onBrew(legend, inProgressDeck)` — `inProgressDeck` = first deck with `deckTotal < 100`, else `null`; Home.jsx wires this with a `console.log` stub and routes tile taps into LegendIdentity
+  - ✅ Build passes (436.43 kB)
+- ✅ 2026-06-11 — Home: legend Box grid with 100-card color gate (`b3764a6`):
+  - ✅ New `src/components/LegendBox.jsx` — fetches all legends with attached decks' `deck_cards(quantity)`, `deckTotal(deck) = sum(quantity) + 1` (commander not stored in deck_cards)
+  - ✅ 3-column grid, 8px gaps, sharp corners; each tile shows Scryfall `art_crop` (live-fetched via `fetchCardByName` if `legends.image_uri` is empty) with name in Zilla Slab, always visible, ellipsis-truncated
+  - ✅ Gate: if no attached deck has reached 100 total cards, art renders `grayscale(1)` with dimmed "N/100" (highest count) in Noto Sans Mono; at >=100, full color, no count
+  - ✅ Tile tap calls `onSelectLegend(legend)`; empty state is a single dimmed mono line "no legends yet"
+  - ✅ Home.jsx rewritten: removed marketing `HOME_SECTIONS`, header is now `eyebrow="Helix" title="home"`, `<LegendBox>` rendered below header
+  - ✅ Build passes (432.64 kB)
 - ✅ 2026-06-11 — SwipeScreen: tighter shadow, full corner mask, vertically centered card (`faa9ac5`):
   - ✅ box-shadow replaced with a tight `0 2px 8px rgba(0,0,0,0.5)` — the large soft halo (`0 8px 24px ...`) made the card read as sitting in a tray; separation now comes mostly from corners + motion
   - ✅ Card image `border-radius` increased from `4.75% / 3.5%` to `5.5% / 4%` to fully mask the white scan corners — image element only, no other element gets a radius

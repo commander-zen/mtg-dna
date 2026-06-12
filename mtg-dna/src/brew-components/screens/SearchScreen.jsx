@@ -52,22 +52,45 @@ function Win98ProgressBar({ active }) {
   );
 }
 
-export default function SearchScreen({ onSearch, loading, error, commanderCard, onCommanderCardChange }) {
-  const [brewInput,    setBrewInput]    = useState("");
+// Split a stored query into the part the user sees/edits and whether lands
+// are currently excluded — "-t:land" is the default-exclusion marker, never
+// shown to the user as text they have to manage.
+function splitLandFilter(q) {
+  const has = /(^|\s)-t:land(\s|$)/.test(q ?? "");
+  const clean = (q ?? "").replace(/(^|\s)-t:land(\s|$)/, " ").trim();
+  return { clean, includeLands: !has };
+}
+
+export default function SearchScreen({ onSearch, loading, error, commanderCard, onCommanderCardChange, initialQuery }) {
+  const initial = splitLandFilter(initialQuery);
+  const [brewInput,    setBrewInput]    = useState(initial.clean);
+  const [includeLands, setIncludeLands] = useState(initial.includeLands);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [draftInput,   setDraftInput]   = useState("");
   const [rawMode] = useState(() => getSettings().rawQueryMode);
+  const inputRef = useRef(null);
 
   const isDisabled = loading;
+  const canSearch = !isDisabled && (!includeLands || Boolean(brewInput.trim()));
+
+  // Pre-fill with the session's active query, cursor at the end — never a
+  // blank box when a query is already active.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
 
   function handleSearch() {
+    if (isDisabled) return;
     const input = brewInput.trim();
-    if (!input || isDisabled) return;
-    saveToHistory(input);
+    const finalQuery = includeLands ? input : `${input} -t:land`.trim();
+    if (!finalQuery) return;
+    if (input) saveToHistory(input);
     setHistoryIndex(-1);
     setDraftInput("");
-    setBrewInput("");
-    onSearch(input);
+    onSearch(finalQuery);
   }
 
   function handleBrewKeyDown(e) {
@@ -119,6 +142,7 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
         {/* ── Input ── */}
         <div style={{ marginBottom: 0 }}>
           <input
+            ref={inputRef}
             type="text"
             value={brewInput}
             onChange={e => { if (!isDisabled) setBrewInput(e.target.value); }}
@@ -148,6 +172,27 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
           />
         </div>
 
+        {/* ── Lands toggle — auto-seed/search exclude lands by default ── */}
+        <label style={{
+          display: "flex", alignItems: "center", gap: 6,
+          marginTop: 8, padding: "2px 0",
+          fontFamily: "var(--font-system)",
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+          cursor: isDisabled ? "default" : "pointer",
+          userSelect: "none",
+          opacity: isDisabled ? 0.5 : 1,
+        }}>
+          <input
+            type="checkbox"
+            checked={includeLands}
+            onChange={e => { if (!isDisabled) setIncludeLands(e.target.checked); }}
+            disabled={isDisabled}
+            style={{ margin: 0 }}
+          />
+          include lands
+        </label>
+
         {/* ── Win98 progress bar ── */}
         <Win98ProgressBar active={loading} />
 
@@ -166,7 +211,7 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
         {/* ── SEARCH button ── */}
         <button
           onClick={handleSearch}
-          disabled={isDisabled || !brewInput.trim()}
+          disabled={!canSearch}
           style={{
             width: "100%",
             background: "var(--color-titlebar)",
@@ -176,9 +221,9 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
             border: "none",
             padding: "18px 24px",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: (isDisabled || !brewInput.trim()) ? "default" : "pointer",
+            cursor: canSearch ? "pointer" : "default",
             borderRadius: 0,
-            opacity: (isDisabled || !brewInput.trim()) ? 0.5 : 1,
+            opacity: canSearch ? 1 : 0.5,
             marginTop: 0,
           }}
         >

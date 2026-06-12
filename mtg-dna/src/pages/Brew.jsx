@@ -233,7 +233,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [swipeCards, setSwipeCards] = useState([]);
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [swipeOrder, setSwipeOrder] = useState("name");
-  const [swipeDir, setSwipeDir]     = useState("desc");
+  const [swipeDir, setSwipeDir]     = useState("asc");
   const [pile, setPile]             = useState([]);
   const [decklist, setDecklist]     = useState([]);
   const [maybeboard, setMaybeboard] = useState([]);
@@ -251,8 +251,19 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [existingCardRows, setExistingCardRows] = useState([]);
   const [legendColorIdentity, setLegendColorIdentity] = useState(null);
 
+  // Where "back" from review should land — the legend's deck row is review's
+  // canonical parent; entering review via the swipe tally keeps swipe-back.
+  const [reviewOrigin, setReviewOrigin] = useState("swipe");
+
   const writeQueueRef = useRef([]);
   const flushingRef   = useRef(false);
+
+  // Decided cards (pile/decklist/maybe, this session or earlier) by name —
+  // re-seeds and in-session searches must never re-queue them.
+  const decidedNamesRef = useRef(new Set());
+  useEffect(() => {
+    decidedNamesRef.current = new Set([...pile, ...decklist, ...maybeboard].map(c => c.name));
+  }, [pile, decklist, maybeboard]);
 
   // A legend-attached session skips commander/mode selection entirely and
   // drops straight into the swipe carousel, auto-seeded from the legend's
@@ -310,6 +321,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       // the background (excluding everything already in the deck) so review's
       // back arrow can drop straight into "continue brewing".
       if (session.startView === "review") {
+        setReviewOrigin("legend");
         setBrewView("review");
         await seedSwipeQueue(colorIdentity, existingRows, { setView: false });
       } else {
@@ -332,8 +344,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       if (!cards.length) throw new Error("No cards found for that query.");
       // Exclude every card already in the deck, on either board — recomputed
       // from live deck_cards on every entry, not just the session that first
-      // seeded the queue.
-      const exclude = new Set(excludeRows.map(r => r.card_name));
+      // seeded the queue — plus anything decided so far this session.
+      const exclude = new Set([...excludeRows.map(r => r.card_name), ...decidedNamesRef.current]);
       setQuery(rawQuery);
       setSwipeCards(cards.filter(c => !exclude.has(c.name)));
       setSwipeIndex(0);
@@ -439,6 +451,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSaveError(null);
     setAttachDeckId(null);
     setExistingCardRows([]);
+    setReviewOrigin("swipe");
   }
 
   async function runSearch(q, order = swipeOrder, dir = swipeDir, label) {
@@ -451,9 +464,13 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const finalQuery = session ? withColorIdentity(q, legendColorIdentity) : q;
       const { cards } = await fetchFirstPageForSwipe(finalQuery, null, { order, dir });
       if (!cards.length) throw new Error("No cards found for that query.");
+      // Decided cards (this session or earlier) never re-queue, no matter how
+      // the queue was re-seeded — skipped/browsed cards are unaffected.
+      const filtered = cards.filter(c => !decidedNamesRef.current.has(c.name));
+      if (!filtered.length) throw new Error("No cards found for that query.");
       setQuery(q);
       setSessionLabel(label !== undefined ? label : sessionLabel);
-      setSwipeCards(cards);
+      setSwipeCards(filtered);
       setSwipeIndex(0);
       setBrewView("swipe");
     } catch (err) {
@@ -554,6 +571,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     const backTarget = brewView === "modes" ? "shell"
       : brewView === "search" ? (session ? "swipe" : "modes")
       : brewView === "swipe" ? (session ? null : (isLokiSession ? "modes" : "search"))
+      : brewView === "review" ? (reviewOrigin === "legend" ? null : "swipe")
       : "swipe";
 
     function handleBack() {
@@ -627,6 +645,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             error={error}
             commanderCard={null}
             onCommanderCardChange={() => {}}
+            initialQuery={query}
           />
         )}
 
@@ -639,7 +658,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onMaybeboardChange={setMaybeboard}
             decklist={decklist}
             onDecklistChange={setDecklist}
-            onGoToPile={() => setBrewView("review")}
+            onGoToPile={() => { setReviewOrigin("swipe"); setBrewView("review"); }}
             onExit={handleBack}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}

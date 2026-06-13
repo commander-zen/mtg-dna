@@ -6,6 +6,13 @@ import AddLegendSheet from "./AddLegendSheet";
 
 const DECK_GATE = 100;
 
+// Fixed 4×2 box of slots, Pokémon-storage style — never scrolls; legends
+// beyond one box page onto the next via the header chevrons.
+const COLS = 4;
+const ROWS = 2;
+const PAGE_SIZE = COLS * ROWS;
+const BOX_KEY = "magicdex-box";
+
 // Gated (grayscale) art reads as a near-dead screen in dark mode without a
 // brightness lift; scoped to dark since the lift glows oddly on light paper.
 const GATED_FILTER = {
@@ -20,15 +27,16 @@ function deckTotal(deck) {
   return cardSum + 1;
 }
 
-// Slots per row in the box tray — uniform square cells, Pokémon-box style.
-const COLS = 4;
-
 export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSignal, activeId }) {
   const { theme, mode } = useTheme();
   const [legends, setLegends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [identityFailed, setIdentityFailed] = useState(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [box, setBox] = useState(() => {
+    const n = parseInt(localStorage.getItem(BOX_KEY) ?? "0", 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  });
   const attemptedRef = useRef(new Set());
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
@@ -48,18 +56,28 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
   }
 
   // Reload on mount and whenever the parent bumps reloadSignal — a brew
-  // session ending refreshes deck totals across the grid and the top block.
+  // session ending refreshes deck totals across the box and the detail pane.
   useEffect(() => {
     loadLegends();
   }, [reloadSignal]);
 
-  // Keep the parent surface's legend list (and its last-active top block) in
-  // sync through loads, adds, and lazy identity healing.
+  // Keep the parent surface's legend list (and its detail pane) in sync
+  // through loads, adds, and lazy identity healing.
   useEffect(() => {
     onLegendsLoaded?.(legends);
   }, [legends]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Selecting a card in AddLegendSheet upserts it (no deck) and refreshes the grid.
+  // The add tile occupies the slot after the last legend, so the box count
+  // includes it. Clamp the current page if legends shrank since last visit.
+  const boxCount = Math.max(1, Math.ceil((legends.length + 1) / PAGE_SIZE));
+  useEffect(() => {
+    if (box > boxCount - 1) setBox(boxCount - 1);
+  }, [box, boxCount]);
+  useEffect(() => {
+    localStorage.setItem(BOX_KEY, String(box));
+  }, [box]);
+
+  // Selecting a card in AddLegendSheet upserts it (no deck) and refreshes the box.
   async function handleAddLegend(card) {
     await supabase
       .from("legends")
@@ -106,64 +124,80 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
 
   if (loading) return null;
 
-  // The add tile occupies the first empty slot; after the filled slots + add
-  // tile, pad the current row and show one full extra row so the box visibly
-  // has room to grow.
-  const occupied   = legends.length + 1;
-  const rows       = Math.ceil(occupied / COLS);
-  const emptyCount = (rows + 1) * COLS - occupied;
+  const safeBox = Math.min(box, boxCount - 1);
+  const atFirst = safeBox <= 0;
+  const atLast  = safeBox >= boxCount - 1;
 
   const slotBase = {
     position: "relative",
-    width: "100%",
-    aspectRatio: "1 / 1",
-    padding: 0,
+    minWidth: 0,
+    minHeight: 0,
     borderRadius: 0,
     overflow: "hidden",
     WebkitTapHighlightColor: "transparent",
   };
 
+  const chevron = (dir, disabled, onClick) => (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-label={dir === "left" ? "Previous box" : "Next box"}
+      style={{
+        width: 36, height: 28,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "transparent", border: "none", padding: 0,
+        color: dimColor,
+        opacity: disabled ? 0.3 : 1,
+        cursor: disabled ? "default" : "pointer",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <span className="material-symbols-rounded" style={{ fontSize: 20 }}>
+        {dir === "left" ? "chevron_left" : "chevron_right"}
+      </span>
+    </button>
+  );
+
   return (
     <>
-      {/* Box header bar */}
+      {/* Box header bar — pager */}
       <div style={{
-        flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 16px",
+        flex: "0 0 auto",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        gap: 16,
+        padding: "6px 12px",
         borderBottom: `1px solid ${borderColor}`,
       }}>
+        {chevron("left", atFirst, () => setBox(b => Math.max(0, b - 1)))}
         <span style={{
           fontFamily: "'Noto Sans Mono', monospace",
           fontSize: 12,
           letterSpacing: "0.22em",
           color: dimColor,
+          minWidth: 56,
+          textAlign: "center",
         }}>
-          BOX
+          BOX {safeBox + 1}
         </span>
-        <span style={{
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 12,
-          color: dimColor,
-        }}>
-          {legends.length}
-        </span>
+        {chevron("right", atLast, () => setBox(b => Math.min(boxCount - 1, b + 1)))}
       </div>
 
-      {/* Slots — the tray scrolls internally; the top detail pane stays fixed. */}
+      {/* Fixed 4×2 slot grid — fills the tray, no scroll */}
       <div style={{
         flex: 1,
         minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch",
-        padding: "12px 16px calc(env(safe-area-inset-bottom) + 16px)",
+        display: "grid",
+        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+        gridTemplateRows: `repeat(${ROWS}, 1fr)`,
+        gap: 6,
+        padding: "8px 10px 10px",
       }}>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-          gap: 8,
-        }}>
-          {legends.map(legend => {
+        {Array.from({ length: PAGE_SIZE }).map((_, i) => {
+          const g = safeBox * PAGE_SIZE + i;
+
+          // Filled slot — a legend.
+          if (g < legends.length) {
+            const legend = legends[g];
             const highest = (legend.decks ?? []).reduce(
               (max, d) => Math.max(max, deckTotal(d)), 0
             );
@@ -232,7 +266,7 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                   {legend.name}
                 </div>
 
-                {/* Selected-slot ring — overlaid so it paints over the art. */}
+                {/* Selection cursor — overlaid so it paints over the art. */}
                 {isActive && (
                   <div style={{
                     position: "absolute", inset: 0,
@@ -243,38 +277,40 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                 )}
               </button>
             );
-          })}
+          }
 
-          {/* Add tile — the first empty slot */}
-          <button
-            onClick={() => setAddOpen(true)}
-            aria-label="Add legend"
-            style={{
-              ...slotBase,
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 2,
-              border: `1px dashed ${dimColor}`,
-              background: "transparent",
-              cursor: "pointer",
-            }}
-          >
-            <span
-              className="material-symbols-rounded"
-              style={{ fontSize: 20, color: dimColor }}
-            >
-              add
-            </span>
-            <span style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 9,
-              color: dimColor,
-            }}>
-              add
-            </span>
-          </button>
+          // The add tile — first empty slot after the last legend.
+          if (g === legends.length) {
+            return (
+              <button
+                key="add"
+                onClick={() => setAddOpen(true)}
+                aria-label="Add legend"
+                style={{
+                  ...slotBase,
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 2,
+                  border: `1px dashed ${dimColor}`,
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 22, color: dimColor }}>
+                  add
+                </span>
+                <span style={{
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 9,
+                  color: dimColor,
+                }}>
+                  add
+                </span>
+              </button>
+            );
+          }
 
-          {/* Visible empty slots — non-interactive room to grow */}
-          {Array.from({ length: emptyCount }).map((_, i) => (
+          // Empty inset cell — non-interactive room to grow.
+          return (
             <div
               key={`empty-${i}`}
               aria-hidden="true"
@@ -285,8 +321,8 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                 pointerEvents: "none",
               }}
             />
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       <AddLegendSheet

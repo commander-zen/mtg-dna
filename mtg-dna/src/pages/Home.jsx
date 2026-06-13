@@ -8,8 +8,9 @@ import SettingsSheet from "../components/SettingsSheet";
 // localStorage now; a `legends.last_active_at` column can back this later.
 const LAST_KEY = "magicdex-last-legend";
 
-// The Box is the root and the only home, modeled on a Pokémon storage box:
-// a detail pane on top (the selected legend) and the box tray below.
+// The Box is the root and only home: a single fixed screen modeled on the
+// Pokémon Gen-V box — wordmark bar, commander detail pane, box tray. The whole
+// thing fits the safe area with NO scrolling anywhere (proportional flex).
 export default function Home({ onLaunchBrew, reloadSignal }) {
   const { theme, mode } = useTheme();
   const [legends, setLegends] = useState([]);
@@ -22,7 +23,7 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
   const trayBg       = mode === "light" ? theme.paper : theme.surface;
   const borderColor  = mode === "light" ? theme.border : theme.muted;
 
-  // Pick the top block on every load: keep the current legend if it survived
+  // Pick the detail pane on every load: keep the current legend if it survived
   // the reload, else the persisted last-active, else the first in the Box.
   function handleLegendsLoaded(list) {
     setLegends(list);
@@ -36,8 +37,8 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
     });
   }
 
-  // Tapping a tray slot swaps the top detail pane on the same surface (no
-  // push) and pins that legend as last-active.
+  // Tapping a tray slot swaps the detail pane in place (no push) and pins
+  // that legend as last-active.
   function selectLegend(legend) {
     localStorage.setItem(LAST_KEY, String(legend.id));
     setActiveLegend(legend);
@@ -56,16 +57,19 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
       flexDirection: "column",
       background: theme.base,
       overflow: "hidden",
+      paddingTop: "env(safe-area-inset-top)",
+      paddingBottom: "env(safe-area-inset-bottom)",
+      paddingLeft: "env(safe-area-inset-left)",
+      paddingRight: "env(safe-area-inset-right)",
+      boxSizing: "border-box",
     }}>
-      {/* Top bar — the magıcdex wordmark drops to the eyebrow position so the
-          box header below doesn't compete with it; settings gear on the right. */}
+      {/* 1. WORDMARK BAR (~6vh) */}
       <div style={{
-        flexShrink: 0,
+        flex: "0 0 auto",
+        height: "6vh",
+        minHeight: 38,
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        paddingTop: "calc(env(safe-area-inset-top) + 10px)",
-        paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
-        paddingRight: 12,
-        paddingBottom: 10,
+        padding: "0 8px 0 16px",
       }}>
         {/* Dotless i (U+0131): lowercase, dot removed, to evoke "dex". */}
         <div style={{
@@ -102,15 +106,8 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
         </button>
       </div>
 
-      {/* TOP PANE (~55%) — the selected legend's detail. Scrolls internally if
-          the oracle text / deck rows overflow; stays put while the tray scrolls. */}
-      <div style={{
-        flex: "55 1 0",
-        minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch",
-      }}>
+      {/* 2. DETAIL PANE (~46vh) */}
+      <div style={{ flex: "46 1 0", minHeight: 0, overflow: "hidden" }}>
         {activeLegend ? (
           <LegendIdentity
             key={`${activeLegend.id}-${reloadSignal}`}
@@ -121,24 +118,44 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
           <div style={{
             height: "100%",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 12,
-            color: dimColor,
-            opacity: 0.6,
+            padding: 16,
           }}>
-            add your first legend
+            <div style={{
+              border: `1px dashed ${borderColor}`,
+              padding: "28px 32px",
+              textAlign: "center",
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              <div style={{
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12,
+                letterSpacing: "0.18em",
+                color: dimColor,
+              }}>
+                BOX EMPTY
+              </div>
+              <div style={{
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 11,
+                color: dimColor,
+                opacity: 0.6,
+              }}>
+                add your first legend below
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* BOTTOM PANE (~45%) — the box tray, a distinct surface. */}
+      {/* 3. BOX TRAY (remaining ~42vh) */}
       <div style={{
-        flex: "45 1 0",
+        flex: "42 1 0",
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
         background: trayBg,
         borderTop: `1px solid ${borderColor}`,
+        overflow: "hidden",
       }}>
         <LegendBox
           onSelectLegend={selectLegend}

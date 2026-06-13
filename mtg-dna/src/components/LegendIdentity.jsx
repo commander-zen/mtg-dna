@@ -12,9 +12,10 @@ function deckTotal(deck) {
   return cardSum + 1;
 }
 
-// The last-active legend's identity, rendered as an in-flow block at the top
-// of the Box (root) surface — not a pushed full-screen route. There is no
-// "back" here: its canonical parent is the surface it already sits on.
+// The detail pane of the storage-box Home: the selected commander as a
+// device readout. LEFT = the actual card image ("sprite"); RIGHT = stacked
+// label/value fields; footer = brew button + the deck row. Fills its pane
+// height with no internal scroll.
 export default function LegendIdentity({ legend, onBrew }) {
   const { theme, mode } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
@@ -25,6 +26,7 @@ export default function LegendIdentity({ legend, onBrew }) {
   const textColor   = mode === "light" ? theme.ink   : theme.white;
   const ruleColor   = mode === "light" ? theme.gold  : theme.amber;
   const borderColor = mode === "light" ? theme.border : theme.muted;
+  const plateBg     = mode === "light" ? theme.paper : theme.surface;
 
   useEffect(() => {
     let cancelled = false;
@@ -35,8 +37,8 @@ export default function LegendIdentity({ legend, onBrew }) {
     return () => { cancelled = true; };
   }, [legend.name]);
 
-  // Re-fetch this legend's decks so counts reflect the latest save —
-  // the `legend` prop carries the snapshot from when the Box tile was tapped.
+  // Re-fetch this legend's decks so counts/status reflect the latest save —
+  // the `legend` prop carries the snapshot from when the slot was tapped.
   useEffect(() => {
     let cancelled = false;
     supabase
@@ -50,155 +52,147 @@ export default function LegendIdentity({ legend, onBrew }) {
     return () => { cancelled = true; };
   }, [legend.id]);
 
-  const highest = decks.reduce((max, d) => Math.max(max, deckTotal(d)), 0);
-  const gated = highest < DECK_GATE;
+  const cardImage = oracleCard ? (getCardImage(oracleCard, "normal") ?? getCardImage(oracleCard, "large")) : null;
+  const typeLine = oracleCard?.type_line ?? legend.type_line ?? "";
+  const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost ?? legend.mana_cost);
 
-  const art = legend.image_uri || (oracleCard ? getCardImage(oracleCard, "art_crop") : null);
-  const typeLine = oracleCard?.type_line ?? "";
-  const oracleText = oracleCard?.oracle_text ?? oracleCard?.card_faces?.[0]?.oracle_text ?? "";
-  const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost);
-
+  // One legend → one deck by design; for the readout use the fullest deck.
+  const primary = decks.reduce(
+    (best, d) => (best === null || deckTotal(d) > deckTotal(best) ? d : best),
+    null
+  );
+  const total = primary ? deckTotal(primary) : 0;
+  const complete = total >= DECK_GATE;
   const inProgressDeck = decks.find(d => deckTotal(d) < DECK_GATE) ?? null;
 
-  return (
-    <div>
-      {/* Art — full-bleed across the surface, extends under the notch */}
-      <div style={{ width: "100%", aspectRatio: "5 / 2", background: theme.border }}>
-        {art && (
-          <img
-            src={art}
-            alt={legend.name}
-            draggable={false}
-            style={{
-              width: "100%", height: "100%",
-              objectFit: "cover",
-              filter: gated ? (mode === "dark" ? "grayscale(1) brightness(1.45) contrast(0.95)" : "grayscale(1)") : "none",
-            }}
-          />
-        )}
+  const field = (label, value, valueColor) => (
+    <div style={{ minWidth: 0 }}>
+      <div style={{
+        fontFamily: "'Noto Sans Mono', monospace",
+        fontSize: 9,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: dimColor,
+        marginBottom: 1,
+      }}>
+        {label}
       </div>
+      <div style={{
+        fontFamily: "'Zilla Slab', serif",
+        fontSize: 15,
+        lineHeight: 1.15,
+        color: valueColor ?? textColor,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {value || "—"}
+      </div>
+    </div>
+  );
 
-      <div style={{ padding: "20px 20px 8px" }}>
-        {/* Name block */}
-        <div style={{ marginBottom: 28 }}>
-          {typeLine && (
-            <div style={{
-              fontFamily: "'Noto Sans', sans-serif",
-              fontSize: 10,
-              fontWeight: 500,
-              letterSpacing: "0.18em",
-              textTransform: "lowercase",
-              color: dimColor,
-              marginBottom: 4,
-            }}>
-              {typeLine.toLowerCase()}
-            </div>
+  return (
+    <div style={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      padding: "8px 16px 4px",
+      overflow: "hidden",
+    }}>
+      {/* Sprite + readout */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 14 }}>
+        {/* Card image — sized to the pane height, corner-masked */}
+        <div style={{
+          height: "100%",
+          aspectRatio: "745 / 1040",
+          flexShrink: 0,
+          borderRadius: "4.8% / 3.4%",
+          overflow: "hidden",
+          background: plateBg,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+        }}>
+          {cardImage && (
+            <img
+              src={cardImage}
+              alt={legend.name}
+              draggable={false}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
           )}
-          <div style={{
-            fontFamily: "'Zilla Slab', serif",
-            fontSize: 28,
-            fontWeight: 400,
-            letterSpacing: "0.02em",
-            color: textColor,
-            lineHeight: 1.1,
-          }}>
-            {legend.name}
-          </div>
-          <div style={{ width: 32, height: 1, background: ruleColor, marginTop: 10 }} />
         </div>
 
-        {/* Oracle text + mana cost */}
-        {(oracleText || manaCost) && (
-          <div style={{ marginBottom: 28 }}>
-            {manaCost && (
-              <div style={{
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 13,
-                color: dimColor,
-                marginBottom: 8,
-              }}>
-                {manaCost}
-              </div>
-            )}
-            {oracleText && (
-              <div style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                fontSize: 14,
-                fontWeight: 300,
-                lineHeight: 1.7,
-                color: textColor,
-                whiteSpace: "pre-line",
-              }}>
-                {oracleText}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Decks list */}
-        <div style={{ marginBottom: 28 }}>
-          {decks.length === 0 ? (
+        {/* Readout — label/value fields, vertically centered */}
+        <div style={{
+          flex: 1, minWidth: 0,
+          display: "flex", flexDirection: "column", justifyContent: "center",
+          gap: 9,
+        }}>
+          {field("name", legend.name)}
+          {field("type", typeLine.toLowerCase())}
+          <div style={{ minWidth: 0 }}>
             <div style={{
               fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 12,
+              fontSize: 9,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
               color: dimColor,
-              opacity: 0.6,
+              marginBottom: 1,
             }}>
-              no decks yet
+              mana
             </div>
-          ) : decks.map(deck => {
-            const total = deckTotal(deck);
-            const complete = total >= DECK_GATE;
-            return (
-              <div
-                key={deck.id}
-                onClick={() => onBrew(legend, deck, { startView: "review" })}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  minHeight: 44,
-                  padding: "12px 0",
-                  borderBottom: `1px solid ${borderColor}`,
-                  cursor: "pointer",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                <div style={{
-                  flex: 1, minWidth: 0,
-                  fontFamily: "'Noto Sans', sans-serif",
-                  fontSize: 14,
-                  color: textColor,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {deck.build_name || legend.name}
-                </div>
-                <div style={{
-                  fontFamily: "'Noto Sans Mono', monospace",
-                  fontSize: 12,
-                  color: complete ? ruleColor : dimColor,
-                  flexShrink: 0,
-                }}>
-                  {complete ? DECK_GATE : `${total}/${DECK_GATE}`}
-                </div>
-                <div style={{
-                  fontFamily: "'Noto Sans', sans-serif",
-                  fontSize: 12,
-                  color: dimColor,
-                  flexShrink: 0,
-                }}>
-                  {deck.status}
-                </div>
-                <span
-                  className="material-symbols-rounded"
-                  style={{ fontSize: 16, color: dimColor, flexShrink: 0 }}
-                >
-                  chevron_right
-                </span>
-              </div>
-            );
-          })}
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 14,
+              color: textColor,
+            }}>
+              {manaCost || "—"}
+            </div>
+          </div>
+          {field("status", primary?.status)}
+          {field("deck", `${total}/${DECK_GATE}`, complete ? ruleColor : textColor)}
         </div>
+      </div>
 
-        {/* Verbs */}
+      {/* Footer — deck row (tappable) + brew button */}
+      <div style={{ flexShrink: 0, paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+        {primary && (
+          <div
+            onClick={() => onBrew(legend, primary, { startView: "review" })}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              minHeight: 36,
+              padding: "6px 0",
+              borderTop: `1px solid ${borderColor}`,
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <div style={{
+              flex: 1, minWidth: 0,
+              fontFamily: "'Noto Sans', sans-serif",
+              fontSize: 13,
+              color: textColor,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {primary.build_name || legend.name}
+            </div>
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 11,
+              color: complete ? ruleColor : dimColor,
+              flexShrink: 0,
+            }}>
+              {complete ? DECK_GATE : `${total}/${DECK_GATE}`}
+            </div>
+            <span
+              className="material-symbols-rounded"
+              style={{ fontSize: 16, color: dimColor, flexShrink: 0 }}
+            >
+              chevron_right
+            </span>
+          </div>
+        )}
+
         <button
           onClick={() => onBrew(legend, inProgressDeck)}
           onPointerDown={() => setBrewPressed(true)}
@@ -207,7 +201,7 @@ export default function LegendIdentity({ legend, onBrew }) {
           style={{
             display: "block",
             width: "100%",
-            height: 48,
+            height: 44,
             background: brewPressed ? ruleColor : "transparent",
             border: `1px solid ${ruleColor}`,
             borderRadius: 0,

@@ -714,7 +714,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
 
         {brewView === "review" && (
           <ReviewScreen
-            pile={pile}
             decklist={decklist}
             maybeboard={maybeboard}
             onConfirm={handleConfirmSave}
@@ -722,6 +721,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             error={saveError}
             live={!!session}
             onRemove={handleRemoveCard}
+            commander={session ? { name: session.legend.name, art: session.legend.image_uri } : null}
           />
         )}
       </div>

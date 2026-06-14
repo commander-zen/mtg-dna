@@ -101,10 +101,16 @@ export default function LegendIdentity({ legend, onBrew }) {
     }}>
       {/* Sprite + readout */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 14 }}>
-        {/* Card image — sized to the pane height, corner-masked */}
+        {/* Card image — a FIXED box every legend fills identically: the box
+            height is the pane height and the width follows the MTG card ratio
+            (63:88). The img is absolutely positioned so the source image's
+            intrinsic size can never drive the box (otherwise an oversized- or
+            old-frame art would render taller than a normal card). object-fit
+            cover fills without distortion; corner mask unchanged. */}
         <div style={{
+          position: "relative",
           height: "100%",
-          aspectRatio: "745 / 1040",
+          aspectRatio: "63 / 88",
           flexShrink: 0,
           borderRadius: "4.8% / 3.4%",
           overflow: "hidden",
@@ -116,7 +122,11 @@ export default function LegendIdentity({ legend, onBrew }) {
               src={cardImage}
               alt={legend.name}
               draggable={false}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              style={{
+                position: "absolute", inset: 0,
+                width: "100%", height: "100%",
+                objectFit: "cover", display: "block",
+              }}
             />
           )}
         </div>

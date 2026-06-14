@@ -54,6 +54,13 @@ export default function LegendIdentity({ legend, onBrew }) {
 
   const cardImage = oracleCard ? (getCardImage(oracleCard, "normal") ?? getCardImage(oracleCard, "large")) : null;
   const typeLine = oracleCard?.type_line ?? legend.type_line ?? "";
+  // Every legal commander is a legendary creature, so "Legendary Creature — "
+  // is dead weight eating horizontal space. Display-only: show the subtypes
+  // after the em dash; fall back to the full type if it's not a creature
+  // (e.g. a planeswalker/Background commander) so nothing reads blank.
+  const displayType = (/creature/i.test(typeLine) && typeLine.includes("—"))
+    ? (typeLine.split("—")[1]?.trim() || typeLine)
+    : typeLine;
   const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost ?? legend.mana_cost);
 
   // One legend → one deck by design; for the readout use the fullest deck.
@@ -138,7 +145,7 @@ export default function LegendIdentity({ legend, onBrew }) {
           gap: 9,
         }}>
           {field("name", legend.name)}
-          {field("type", typeLine.toLowerCase())}
+          {field("type", displayType.toLowerCase())}
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontFamily: "'Noto Sans Mono', monospace",

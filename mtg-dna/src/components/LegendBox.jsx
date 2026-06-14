@@ -37,7 +37,16 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     const n = parseInt(localStorage.getItem(BOX_KEY) ?? "0", 10);
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
+  const [toast, setToast] = useState(null);
   const attemptedRef = useRef(new Set());
+  const toastTimer = useRef(null);
+
+  function showToast(msg) {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 1800);
+  }
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
   const textColor   = mode === "light" ? theme.ink   : theme.white;
@@ -77,11 +86,22 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     localStorage.setItem(BOX_KEY, String(box));
   }, [box]);
 
-  // Selecting a card in AddLegendSheet upserts it (no deck) and refreshes the box.
+  // Selecting a card in AddLegendSheet adds it (no deck) and refreshes the box
+  // — unless it's already in the box. Match on scryfall id, never name: if it's
+  // a duplicate, don't insert; just select the existing legend and flash a
+  // notice. Newly added rows carry scryfall_id so this guard works immediately,
+  // before the lazy identity heal runs.
   async function handleAddLegend(card) {
+    const existing = legends.find(l => l.scryfall_id === card.id);
+    if (existing) {
+      setAddOpen(false);
+      onSelectLegend?.(existing);
+      showToast("already in your box");
+      return;
+    }
     await supabase
       .from("legends")
-      .upsert({ name: card.name }, { onConflict: "name" });
+      .upsert({ name: card.name, scryfall_id: card.id }, { onConflict: "name" });
     setAddOpen(false);
     setLoading(true);
     await loadLegends();
@@ -324,6 +344,27 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
           );
         })}
       </div>
+
+      {/* Brief dimmed flash when a duplicate add is redirected to select. */}
+      {toast && (
+        <div style={{
+          position: "fixed",
+          left: "50%",
+          bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+          transform: "translateX(-50%)",
+          zIndex: 300,
+          background: "rgba(0,0,0,0.8)",
+          color: "rgba(255,255,255,0.85)",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          letterSpacing: "0.08em",
+          padding: "8px 14px",
+          border: `1px solid ${borderColor}`,
+          pointerEvents: "none",
+        }}>
+          {toast}
+        </div>
+      )}
 
       <AddLegendSheet
         open={addOpen}

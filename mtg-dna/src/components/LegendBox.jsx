@@ -96,7 +96,7 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     if (existing) {
       setAddOpen(false);
       onSelectLegend?.(existing);
-      showToast("already in your box");
+      showToast("already in the dex");
       return;
     }
     await supabase

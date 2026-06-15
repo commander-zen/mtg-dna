@@ -448,42 +448,17 @@ export default function SwipeScreen({
                     </div>
                   )}
 
-                  {/* Game Changer indicator — Helix amber, sharp-edged, on the
-                      card's top-left corner. Detection (isGameChanger) is
-                      unchanged; this only restyles the holdover blue glyph. */}
+                  {/* Game Changer indicator — the amber breathing glow alone,
+                      hugging the card's rounded corners. Detection
+                      (isGameChanger) is unchanged. */}
                   {isCurrent && isGameChanger && (
-                    <>
-                      {/* Amber glow hugging the card's rounded corners */}
-                      <div style={{
-                        position: "absolute", inset: 0,
-                        borderRadius: "5.5% / 4%",
-                        animation: "gc-glow 1.5s ease-in-out infinite",
-                        pointerEvents: "none",
-                        zIndex: 3,
-                      }} />
-                      {/* Bolt chip — Material Symbols glyph on a dark plate */}
-                      <div style={{
-                        position: "absolute",
-                        top: 6, left: 6,
-                        zIndex: 6,
-                        width: 24, height: 24,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "rgba(10,14,26,0.85)",
-                        border: "1px solid #e8a020",
-                        pointerEvents: "none",
-                      }}>
-                        <span
-                          className="material-symbols-rounded"
-                          style={{
-                            fontSize: 16,
-                            color: "#e8a020",
-                            fontVariationSettings: "'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24",
-                          }}
-                        >
-                          bolt
-                        </span>
-                      </div>
-                    </>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      borderRadius: "5.5% / 4%",
+                      animation: "gc-glow 1.5s ease-in-out infinite",
+                      pointerEvents: "none",
+                      zIndex: 3,
+                    }} />
                   )}
                 </div>
 

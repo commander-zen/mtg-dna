@@ -448,17 +448,39 @@ export default function SwipeScreen({
                     </div>
                   )}
 
-                  {/* Game Changer indicator — the amber breathing glow alone,
-                      hugging the card's rounded corners. Detection
-                      (isGameChanger) is unchanged. */}
+                  {/* Game Changer indicator — the amber breathing glow draws the
+                      eye; the "GAME CHANGER" tag names it so the term is
+                      self-explanatory. Detection (isGameChanger) is unchanged. */}
                   {isCurrent && isGameChanger && (
-                    <div style={{
-                      position: "absolute", inset: 0,
-                      borderRadius: "5.5% / 4%",
-                      animation: "gc-glow 1.5s ease-in-out infinite",
-                      pointerEvents: "none",
-                      zIndex: 3,
-                    }} />
+                    <>
+                      <div style={{
+                        position: "absolute", inset: 0,
+                        borderRadius: "5.5% / 4%",
+                        animation: "gc-glow 1.5s ease-in-out infinite",
+                        pointerEvents: "none",
+                        zIndex: 3,
+                      }} />
+                      {/* Sharp dark plate, amber mono text, bottom-left corner
+                          (clear of the card's rounded corner and the flip
+                          button on the bottom-right). */}
+                      <div style={{
+                        position: "absolute",
+                        left: 10, bottom: 10,
+                        zIndex: 6,
+                        background: "rgba(10,14,26,0.85)",
+                        padding: "3px 6px",
+                        pointerEvents: "none",
+                      }}>
+                        <span style={{
+                          fontFamily: "'Noto Sans Mono', monospace",
+                          fontSize: 10,
+                          letterSpacing: "0.1em",
+                          color: "#e8a020",
+                        }}>
+                          GAME CHANGER
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
 

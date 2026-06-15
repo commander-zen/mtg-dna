@@ -59,6 +59,18 @@ export default function ReviewScreen({
   // non-session save flow has no legend yet, so it keeps the text header.
   const showAnchor = live && commander;
 
+  // WREC composition counts (by card quantity). Multi-tag means these can sum
+  // to more than the deck size — a composition view, not a partition. A zero
+  // category is the dump-stat tell, so it renders dimmed.
+  const wrecCounts = WREC_CHIPS.map(({ tag, label }) => {
+    let n = 0;
+    for (const k in (cardTags ?? {})) {
+      const e = cardTags[k];
+      if (e?.tags?.includes(tag)) n += (e.quantity ?? 1);
+    }
+    return { tag, label, n };
+  });
+
   const inputStyle = {
     width: "100%",
     boxSizing: "border-box",
@@ -280,6 +292,25 @@ export default function ReviewScreen({
             color: "var(--text)",
           }}>
             {live ? "DECK" : "REVIEW"} · {totalCards} CARD{totalCards !== 1 ? "S" : ""}
+          </div>
+        )}
+
+        {/* WREC composition band — counts per category (by quantity). Multi-tag
+            so they can exceed deck size; a 0 reads dimmed as a structural gap. */}
+        {live && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", alignItems: "center",
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11,
+            paddingBottom: 8,
+            borderBottom: "1px solid var(--bevel-dark)",
+          }}>
+            {wrecCounts.map(({ tag, label, n }, i) => (
+              <span key={tag} style={{ whiteSpace: "nowrap" }}>
+                {i > 0 && <span style={{ color: "var(--muted)", margin: "0 6px" }}>·</span>}
+                <span style={{ color: n === 0 ? "var(--muted)" : "var(--text)" }}>{label} {n}</span>
+              </span>
+            ))}
           </div>
         )}
 

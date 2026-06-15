@@ -170,45 +170,46 @@ export default function LegendIdentity({ legend, onBrew }) {
         </div>
       </div>
 
-      {/* Footer — deck row (tappable) + brew button */}
+      {/* Footer — deck row + brew button. The deck row is ALWAYS rendered so
+          the footer height is constant: the sprite + readout never reflow or
+          compress based on whether a deck exists. No deck → a dimmed
+          "no deck yet" with 0/100 in the same footprint, non-interactive. */}
       <div style={{ flexShrink: 0, paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-        {primary && (
-          <div
-            onClick={() => onBrew(legend, primary, { startView: "review" })}
-            style={{
-              display: "flex", alignItems: "center", gap: 10,
-              minHeight: 36,
-              padding: "6px 0",
-              borderTop: `1px solid ${borderColor}`,
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <div style={{
-              flex: 1, minWidth: 0,
-              fontFamily: "'Noto Sans', sans-serif",
-              fontSize: 13,
-              color: textColor,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {primary.build_name || legend.name}
-            </div>
-            <div style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 11,
-              color: complete ? ruleColor : dimColor,
-              flexShrink: 0,
-            }}>
-              {complete ? DECK_GATE : `${total}/${DECK_GATE}`}
-            </div>
-            <span
-              className="material-symbols-rounded"
-              style={{ fontSize: 16, color: dimColor, flexShrink: 0 }}
-            >
-              chevron_right
-            </span>
+        <div
+          onClick={primary ? () => onBrew(legend, primary, { startView: "review" }) : undefined}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            minHeight: 36,
+            padding: "6px 0",
+            borderTop: `1px solid ${borderColor}`,
+            cursor: primary ? "pointer" : "default",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 13,
+            color: primary ? textColor : dimColor,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {primary ? (primary.build_name || legend.name) : "no deck yet"}
           </div>
-        )}
+          <div style={{
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11,
+            color: complete ? ruleColor : dimColor,
+            flexShrink: 0,
+          }}>
+            {complete ? DECK_GATE : `${total}/${DECK_GATE}`}
+          </div>
+          <span
+            className="material-symbols-rounded"
+            style={{ fontSize: 16, color: dimColor, flexShrink: 0, opacity: primary ? 1 : 0.35 }}
+          >
+            chevron_right
+          </span>
+        </div>
 
         <button
           onClick={() => onBrew(legend, inProgressDeck)}

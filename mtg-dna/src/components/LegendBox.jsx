@@ -13,12 +13,10 @@ const ROWS = 2;
 const PAGE_SIZE = COLS * ROWS;
 const BOX_KEY = "magicdex-box";
 
-// Gated (grayscale) art reads as a near-dead screen in dark mode without a
-// brightness lift; scoped to dark since the lift glows oddly on light paper.
-const GATED_FILTER = {
-  dark:  "grayscale(1) brightness(1.45) contrast(0.95)",
-  light: "grayscale(1)",
-};
+// Gated ("not yet a deck") slots are darkened with a SCRIM OVERLAY on top of
+// the art — never a CSS filter on the image. Desaturating Scryfall art
+// violates their image terms (see DATA_SOURCES.md); the img stays untouched.
+const GATE_SCRIM = "rgba(10,14,26,0.55)";
 
 // A deck's total = sum of deck_cards quantities + 1 for the commander
 // (the commander itself is never written to deck_cards).
@@ -53,7 +51,6 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
   const ringColor   = mode === "light" ? theme.gold  : theme.amber;
   const borderColor = mode === "light" ? theme.border : theme.muted;
   const slotBg      = theme.paper ?? theme.surface ?? "transparent";
-  const gatedFilter = mode === "dark" ? GATED_FILTER.dark : GATED_FILTER.light;
 
   async function loadLegends() {
     const { data, error } = await supabase
@@ -247,13 +244,21 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                       position: "absolute", inset: 0,
                       width: "100%", height: "100%",
                       objectFit: "cover",
-                      filter: gated ? gatedFilter : "none",
                     }}
                   />
                 ) : (
                   <div style={{
                     position: "absolute", inset: 0,
                     background: noIdentity ? textColor : theme.border,
+                  }} />
+                )}
+
+                {/* Locked scrim — sits ON TOP of unaltered art (no filter). */}
+                {gated && (
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    background: GATE_SCRIM,
+                    pointerEvents: "none",
                   }} />
                 )}
 

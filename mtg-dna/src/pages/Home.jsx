@@ -67,7 +67,7 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
       <div style={{
         flex: "0 0 auto",
         height: "6vh",
-        minHeight: 38,
+        minHeight: 44,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 8px 0 16px",
       }}>
@@ -86,7 +86,7 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
           onClick={() => setSettingsOpen(true)}
           aria-label="Settings"
           style={{
-            width: 40, height: 40,
+            width: 44, height: 44,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "transparent", border: "none", padding: 0,
             cursor: "pointer",

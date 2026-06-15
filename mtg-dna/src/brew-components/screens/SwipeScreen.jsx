@@ -40,6 +40,7 @@ export default function SwipeScreen({
   onGoToBrews,
   onCardCommit, reconnecting,
   onDoubleTag,
+  query, onInlineSearch,
 }) {
   // Cards already sorted into a pile/decklist/maybeboard leave the carousel
   // entirely — decided cards never reappear when browsing back.
@@ -74,7 +75,10 @@ export default function SwipeScreen({
   const [imgError,     setImgError]     = useState(false);
   const [cardExpanded, setCardExpanded] = useState(false);
   const [flipped,      setFlipped]      = useState(false);
+  const [searchOpen,   setSearchOpen]   = useState(false);
+  const [searchText,   setSearchText]   = useState("");
 
+  const searchInputRef    = useRef(null);
   const didMountRef       = useRef(false);
   const dragStartRef      = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -344,6 +348,28 @@ export default function SwipeScreen({
     if (card?.card_faces?.length > 1) setFlipped(f => !f);
   });
 
+  // Inline search in the bottom bar — expands over the gesture hint (never the
+  // back button), pre-filled with the active query. Enter submits + re-seeds;
+  // the right control cancels (returns the hint); the × clears the text.
+  function openInlineSearch() {
+    setSearchText(query ?? "");
+    setSearchOpen(true);
+    setTimeout(() => {
+      const el = searchInputRef.current;
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }
+  function toggleInlineSearch() {
+    if (searchOpen) setSearchOpen(false);
+    else openInlineSearch();
+  }
+  function submitInlineSearch() {
+    const q = searchText.trim();
+    if (!q) return;
+    setSearchOpen(false);
+    onInlineSearch?.(q);
+  }
+
   // Reserve space for the header block (back button + tally + stack info)
   // and the bottom gesture legend — the card track centers in what's left.
   const topReserve      = "calc(env(safe-area-inset-top) + 92px)";
@@ -490,6 +516,8 @@ export default function SwipeScreen({
                     onClick={e => { e.stopPropagation(); setFlipped(f => !f); }}
                     style={{
                       position: "absolute", bottom: 16, right: 16, zIndex: 5,
+                      minHeight: 44, minWidth: 44,
+                      display: "flex", alignItems: "center", justifyContent: "center",
                       background: "rgba(0,0,0,0.6)",
                       border: "1px solid rgba(255,255,255,0.2)",
                       borderRadius: 20,
@@ -508,7 +536,9 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Persistent header — exit, legend anchor, running tally ── */}
+      {/* ── Persistent header — legend anchor + running tally. Back/search
+            moved to the bottom thumb-zone; the legend anchor stays (load-
+            bearing per DESIGN_DOCTRINE). ── */}
       <div style={{
         position: "absolute",
         top: "env(safe-area-inset-top)",
@@ -518,29 +548,6 @@ export default function SwipeScreen({
         padding: "6px 8px",
         background: "transparent",
       }}>
-        <button
-          onClick={onExit}
-          aria-label="Back to search"
-          style={{
-            width: 40, height: 40,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "transparent", border: "none", padding: 0,
-            color: "rgba(255,255,255,0.7)",
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span
-            className="material-symbols-rounded"
-            style={{
-              fontSize: 22,
-              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-            }}
-          >
-            arrow_back
-          </span>
-        </button>
-
         <div style={{
           fontFamily: "'Zilla Slab', serif",
           fontSize: 14,
@@ -551,36 +558,9 @@ export default function SwipeScreen({
           whiteSpace: "nowrap",
           padding: "0 8px",
           flex: 1,
-          textAlign: "center",
         }}>
           {commanderName ?? ""}
         </div>
-
-        {onGoToSearch && (
-          <button
-            onClick={onGoToSearch}
-            aria-label="Search to re-seed queue"
-            style={{
-              width: 40, height: 40,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "transparent", border: "none", padding: 0,
-              color: "rgba(255,255,255,0.7)",
-              cursor: "pointer",
-              flexShrink: 0,
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <span
-              className="material-symbols-rounded"
-              style={{
-                fontSize: 20,
-                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              search
-            </span>
-          </button>
-        )}
 
         <button
           onClick={onGoToPile}
@@ -638,6 +618,8 @@ export default function SwipeScreen({
             <button
               onClick={doUndo}
               style={{
+                minHeight: 44, minWidth: 44,
+                display: "flex", alignItems: "center", justifyContent: "center",
                 background: "transparent", border: "none",
                 color: "rgba(255,255,255,0.4)",
                 fontFamily: "'Noto Sans', sans-serif",
@@ -649,7 +631,9 @@ export default function SwipeScreen({
           <button
             onClick={e => { e.stopPropagation(); setSortMenuOpen(o => !o); }}
             style={{
-              padding: "3px 8px", borderRadius: 4,
+              minHeight: 44,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "3px 10px", borderRadius: 4,
               border: "1px solid rgba(255,255,255,0.15)",
               background: "rgba(0,0,0,0.5)",
               color: "rgba(255,255,255,0.4)",
@@ -687,7 +671,8 @@ export default function SwipeScreen({
                   setSortMenuOpen(false);
                 }}
                 style={{
-                  display: "block", width: "100%",
+                  display: "flex", alignItems: "center", width: "100%",
+                  minHeight: 44,
                   padding: "10px 14px",
                   background: active ? "rgba(255,255,255,0.08)" : "transparent",
                   border: "none",
@@ -743,22 +728,109 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Gesture legend — persistent while a card is shown ── */}
-      {!done && (
-        <div style={{
-          position: "absolute",
-          bottom: "calc(env(safe-area-inset-bottom) + 22px)",
-          left: 0, right: 0, zIndex: 2,
-          display: "flex", justifyContent: "center",
-          pointerEvents: "none",
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 11,
-          color: "var(--muted)",
-          whiteSpace: "pre",
-        }}>
-          {"← browse →  ↑ mainboard  ↓ maybe"}
-        </div>
-      )}
+      {/* ── Bottom controls — lock-screen grammar: BACK bottom-left, SEARCH
+            bottom-right, gesture hint between. Tapping search expands a field
+            over the hint (never over the back button). Back is always
+            reachable, even in the done state. ── */}
+      <div style={{
+        position: "absolute",
+        left: 0, right: 0,
+        bottom: "calc(env(safe-area-inset-bottom) + 8px)",
+        zIndex: 5,
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "0 8px",
+      }}>
+        {/* BACK — bottom-left, ≥44px, climbs the ladder (swipe → legend) */}
+        <button
+          onClick={onExit}
+          aria-label="Back"
+          style={{
+            width: 44, height: 44, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
+            color: "rgba(255,255,255,0.75)",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span className="material-symbols-rounded" style={{ fontSize: 22 }}>arrow_back</span>
+        </button>
+
+        {/* Middle — gesture hint, or the expanded search field */}
+        {!done && (searchOpen ? (
+          <div style={{
+            flex: 1, minWidth: 0,
+            display: "flex", alignItems: "center",
+            height: 44,
+            background: "rgba(0,0,0,0.55)",
+            border: "1px solid rgba(255,255,255,0.15)",
+          }}>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") submitInlineSearch(); }}
+              placeholder="scryfall query…"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              enterKeyHint="search"
+              style={{
+                flex: 1, minWidth: 0, height: "100%",
+                background: "transparent", border: "none", outline: "none",
+                color: "#fff",
+                fontFamily: "var(--font-system)", fontSize: 16,
+                padding: "0 10px",
+              }}
+            />
+            {searchText && (
+              <button
+                onClick={() => { setSearchText(""); searchInputRef.current?.focus(); }}
+                aria-label="Clear search"
+                style={{
+                  width: 44, height: 44, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none", padding: 0,
+                  color: "rgba(255,255,255,0.6)", cursor: "pointer",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>close</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{
+            flex: 1, minWidth: 0,
+            textAlign: "center",
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11,
+            color: "var(--muted)",
+            whiteSpace: "nowrap",
+            overflow: "hidden", textOverflow: "ellipsis",
+            pointerEvents: "none",
+          }}>
+            {"← browse →  ↑ mainboard  ↓ maybe"}
+          </div>
+        ))}
+
+        {/* SEARCH — bottom-right, ≥44px. Opens the field; when open, cancels
+            (returns the hint). Submit is on Enter. */}
+        {!done && (
+          <button
+            onClick={toggleInlineSearch}
+            aria-label={searchOpen ? "Close search" : "Search"}
+            style={{
+              width: 44, height: 44, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
+              color: "rgba(255,255,255,0.75)",
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>
+              {searchOpen ? "close" : "search"}
+            </span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

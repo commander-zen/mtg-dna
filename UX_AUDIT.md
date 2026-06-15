@@ -55,13 +55,22 @@ The name label is what keeps this compliant — never remove it.
 
 ## Audit status (update each UX session)
 
-- Touch targets: SWEEP PENDING — suspect: box pager chevrons, settings
-  gear, card flip button, swipe-header search glyph.
-- Reachability: IN PROGRESS — back/search moving to bottom thumb-zone
-  (lock-screen pattern).
+- Touch targets: SWEPT (2026-06-13) — padded to ≥44px: swipe bottom
+  back/search/clear controls, box pager chevrons (was 36×28), settings
+  gear (was 40×40), card flip button, swipe-strip UNDO + SORT toggle,
+  sort-menu rows, settings segmented-sort buttons, add-legend input/close.
+  Code-verified, not yet device-measured.
+- Reachability: DONE (2026-06-13) — swipe back + search live in the
+  bottom thumb-zone (lock-screen pattern: back-left, search-right,
+  hint between); top header back chevron removed (legend anchor kept).
 - Swipe ambiguity: UNVERIFIED — needs on-device test.
-- Overlay dismissal: VERIFY — AddLegendSheet, SettingsSheet, search.
-- Input fields: VERIFY — add-legend search, expanded swipe search.
+- Overlay dismissal: PASS (2026-06-13) — AddLegendSheet + SettingsSheet
+  each have a visible close (×) plus predictable backdrop-tap close; the
+  expanded swipe search cancels via its right control (returns the hint).
+- Input fields: PASS (2026-06-13) — add-legend search and the expanded
+  swipe search are type="search", autocapitalize/autocorrect off,
+  submit on Enter (no surprise auto-submit), visible clear/cancel,
+  placeholder present; swipe search pre-fills the active query.
 - Login wall / onboarding: PASS.
 - Microsession persistence: PASS.
 

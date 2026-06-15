@@ -163,7 +163,7 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
       disabled={disabled}
       aria-label={dir === "left" ? "Previous box" : "Next box"}
       style={{
-        width: 36, height: 28,
+        width: 44, height: 44,
         display: "flex", alignItems: "center", justifyContent: "center",
         background: "transparent", border: "none", padding: 0,
         color: dimColor,

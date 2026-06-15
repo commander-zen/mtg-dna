@@ -711,6 +711,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onExit={goBack}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
+            query={query}
+            onInlineSearch={(q) => runSearch(q)}
             commanderCard={sessionLabel ? { name: sessionLabel } : null}
             onCommanderCardChange={() => {}}
             initialIndex={swipeIndex}

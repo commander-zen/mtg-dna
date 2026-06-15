@@ -70,12 +70,45 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
           display: "flex", flexDirection: "column",
           overflow: "hidden",
         }}>
-          <div style={{ padding: "16px 20px 8px" }}>
+          {/* Header — one obvious dismiss (the close ×), matching the app's
+              overlay grammar; the backdrop tap also closes. */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "4px 8px 0 20px",
+          }}>
+            <span style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: dimColor,
+            }}>
+              add legend
+            </span>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 44, height: 44,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "transparent", border: "none", padding: 0,
+                color: dimColor, cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 22 }}>close</span>
+            </button>
+          </div>
+
+          <div style={{ padding: "0 20px 8px" }}>
             <input
               ref={inputRef}
+              type="search"
               value={query}
               onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && results[0]) handleSelect(results[0]); }}
               placeholder="search for a legend…"
+              enterKeyHint="search"
               autoCorrect="off"
               autoCapitalize="off"
               autoComplete="off"
@@ -90,7 +123,7 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
                 border: "none",
                 borderBottom: `1px solid ${borderColor}`,
                 borderRadius: 0,
-                padding: "8px 0",
+                padding: "12px 0",
                 outline: "none",
               }}
             />

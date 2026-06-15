@@ -64,16 +64,36 @@ export default function SettingsSheet({ open, onClose }) {
           borderTop: `1px solid ${borderColor}`,
           padding: "20px 20px calc(env(safe-area-inset-bottom) + 24px)",
         }}>
+          {/* Header — one obvious dismiss (the close ×); the backdrop tap
+              also closes. */}
           <div style={{
-            fontFamily: "'Noto Sans', sans-serif",
-            fontSize: 10,
-            fontWeight: 500,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: dimColor,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
             marginBottom: 12,
           }}>
-            settings
+            <span style={{
+              fontFamily: "'Noto Sans', sans-serif",
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: dimColor,
+            }}>
+              settings
+            </span>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 44, height: 44,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "transparent", border: "none", padding: 0,
+                margin: "-10px -10px -10px 0",
+                color: dimColor, cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 22 }}>close</span>
+            </button>
           </div>
 
           {/* Theme toggle */}
@@ -123,7 +143,8 @@ export default function SettingsSheet({ open, onClose }) {
                     key={c.value}
                     onClick={() => updateDefaults({ sort: c.value })}
                     style={{
-                      padding: "6px 10px",
+                      minHeight: 44,
+                      padding: "0 12px",
                       border: "none",
                       borderLeft: idx > 0 ? `1px solid ${borderColor}` : "none",
                       background: active ? accent : "transparent",

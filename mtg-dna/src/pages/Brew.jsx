@@ -8,6 +8,7 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, LOKI_CLONE_QUERY } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
+import { tagCard, untagCard, fetchDeckCardsWithTags } from "../lib/deckTags.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -256,6 +257,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // canonical parent; entering review via the swipe tally keeps swipe-back.
   const [reviewOrigin, setReviewOrigin] = useState("swipe");
 
+  // WREC tags per deck card, keyed `${section}:${card_name}` →
+  // { id: deck_card_id, tags: string[], quantity }. Loaded when review opens;
+  // toggling is an immediate write (a tag is a write, no save step).
+  const [cardTags, setCardTags] = useState({});
+
   const writeQueueRef = useRef([]);
   const flushingRef   = useRef(false);
 
@@ -433,6 +439,58 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     const card = list[idx];
     setList(prev => prev.filter((_, i) => i !== idx));
     commitCard(card, section, -1);
+  }
+
+  // Load every deck card's WREC tags when review opens (and on resume), keyed
+  // for O(1) lookup by the review rows.
+  async function loadDeckTags(deckId) {
+    if (!deckId) return;
+    try {
+      const rows = await fetchDeckCardsWithTags(deckId);
+      const map = {};
+      for (const r of rows) {
+        map[`${r.section}:${r.card_name}`] = { id: r.id, tags: r.tags, quantity: r.quantity };
+      }
+      setCardTags(map);
+    } catch { /* tags are best-effort; review still renders without them */ }
+  }
+
+  useEffect(() => {
+    if (brewView === "review" && attachDeckId) loadDeckTags(attachDeckId);
+  }, [brewView, attachDeckId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toggling a WREC tag is an immediate write — flick-is-a-write extends to
+  // tagging, no save step. Optimistic, reverting on failure.
+  async function handleToggleTag(name, section, tag) {
+    if (!attachDeckId) return;
+    const key = `${section}:${name}`;
+    let entry = cardTags[key];
+    let deckCardId = entry?.id;
+    if (!deckCardId) {
+      const { data } = await supabase
+        .from("deck_cards")
+        .select("id")
+        .eq("deck_id", attachDeckId).eq("card_name", name).eq("section", section)
+        .maybeSingle();
+      deckCardId = data?.id;
+      if (!deckCardId) return;
+    }
+    const had = (entry?.tags ?? []).includes(tag);
+    setCardTags(prev => {
+      const cur = prev[key] ?? { id: deckCardId, tags: [], quantity: 1 };
+      const tags = had ? cur.tags.filter(t => t !== tag) : [...cur.tags, tag];
+      return { ...prev, [key]: { ...cur, id: deckCardId, tags } };
+    });
+    try {
+      if (had) await untagCard(deckCardId, tag);
+      else await tagCard(deckCardId, tag);
+    } catch {
+      setCardTags(prev => {
+        const cur = prev[key] ?? { id: deckCardId, tags: [], quantity: 1 };
+        const tags = had ? [...cur.tags, tag] : cur.tags.filter(t => t !== tag);
+        return { ...prev, [key]: { ...cur, id: deckCardId, tags } };
+      });
+    }
   }
 
   // Tapping the Brew tab while already on this page returns to the landing
@@ -735,6 +793,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             live={!!session}
             onRemove={handleRemoveCard}
             commander={session ? { name: session.legend.name, art: session.legend.image_uri } : null}
+            cardTags={cardTags}
+            onToggleTag={handleToggleTag}
           />
         )}
       </div>

@@ -7,6 +7,17 @@ const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 
 const DECK_GATE = 100;
 
+// WREC tag chips, abbreviated to fit mobile. Values mirror the wrec_tag enum;
+// the writes themselves live in Brew.jsx (this stays db-free).
+const WREC_CHIPS = [
+  { tag: "ramp",            label: "RAMP" },
+  { tag: "card-advantage",  label: "CARD-ADV" },
+  { tag: "disruption",      label: "DISRUPTION" },
+  { tag: "mass-disruption", label: "MASS-DIS" },
+  { tag: "plan",            label: "PLAN" },
+];
+const LABEL_BY_TAG = Object.fromEntries(WREC_CHIPS.map(c => [c.tag, c.label]));
+
 // Review the accumulated swipe results before saving. Purely presentational —
 // the Supabase writes live in the page that owns the brew state (Brew.jsx),
 // keeping brew-components free of db imports.
@@ -25,9 +36,14 @@ export default function ReviewScreen({
   onConfirm, saving, error,
   live, onRemove,
   commander,
+  cardTags, onToggleTag,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
+  // Tap-to-expand: only one card's WREC chip selector open at a time. Chosen
+  // over always-on chips so five 44px targets fit mobile width cleanly and
+  // untagged cards stay chip-free (no "uncategorized" noise).
+  const [expandedKey, setExpandedKey] = useState(null);
 
   const groups = {
     decklist: groupByName(decklist),
@@ -72,43 +88,101 @@ export default function ReviewScreen({
         {items.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>—</div>
         ) : (
-          items.map(({ name, quantity }) => (
-            <div key={name} style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              padding: "5px 0",
-              fontSize: 13,
-              color: "var(--text)",
-            }}>
-              <span style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}>{name}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                {quantity > 1 && (
-                  <span style={{ color: "var(--muted)" }}>×{quantity}</span>
-                )}
-                {live && (
-                  <button
-                    onClick={() => onRemove(name, sectionKey)}
-                    aria-label={`Remove ${name}`}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      padding: 0,
-                      color: "var(--muted)",
-                      fontFamily: "var(--font-system)",
-                      fontSize: 14,
-                      lineHeight: 1,
-                      cursor: "pointer",
-                    }}
-                  >×</button>
+          items.map(({ name, quantity }) => {
+            const key = `${sectionKey}:${name}`;
+            const tags = cardTags?.[key]?.tags ?? [];
+            const expanded = expandedKey === key;
+            return (
+              <div key={name}>
+                {/* Tapping the row (live) opens its WREC chip selector. */}
+                <div
+                  onClick={live ? () => setExpandedKey(k => (k === key ? null : key)) : undefined}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    minHeight: live ? 44 : undefined,
+                    padding: "5px 0",
+                    fontSize: 13,
+                    color: "var(--text)",
+                    cursor: live ? "pointer" : "default",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span style={{
+                    flex: 1, minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>{name}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    {/* Active tags, compact, when collapsed — untagged shows nothing */}
+                    {!expanded && tags.length > 0 && (
+                      <span style={{
+                        fontFamily: "'Noto Sans Mono', monospace",
+                        fontSize: 9,
+                        letterSpacing: "0.06em",
+                        color: "var(--primary)",
+                      }}>
+                        {tags.map(t => LABEL_BY_TAG[t] ?? t).join(" · ")}
+                      </span>
+                    )}
+                    {quantity > 1 && (
+                      <span style={{ color: "var(--muted)" }}>×{quantity}</span>
+                    )}
+                    {live && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemove(name, sectionKey); }}
+                        aria-label={`Remove ${name}`}
+                        style={{
+                          minHeight: 44, minWidth: 44,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          color: "var(--muted)",
+                          fontFamily: "var(--font-system)",
+                          fontSize: 16,
+                          lineHeight: 1,
+                          cursor: "pointer",
+                        }}
+                      >×</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* WREC chip selector — five 44px multi-select chips */}
+                {live && expanded && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "4px 0 10px" }}>
+                    {WREC_CHIPS.map(({ tag, label }) => {
+                      const active = tags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={(e) => { e.stopPropagation(); onToggleTag?.(name, sectionKey, tag); }}
+                          style={{
+                            minHeight: 44,
+                            padding: "0 12px",
+                            display: "flex", alignItems: "center",
+                            border: `1px solid ${active ? "var(--primary)" : "var(--muted)"}`,
+                            background: active ? "var(--primary)" : "transparent",
+                            color: active ? "var(--color-bg)" : "var(--muted)",
+                            fontFamily: "'Noto Sans Mono', monospace",
+                            fontSize: 10,
+                            letterSpacing: "0.08em",
+                            borderRadius: 0,
+                            cursor: "pointer",
+                            WebkitTapHighlightColor: "transparent",
+                          }}
+                        >{label}</button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     );

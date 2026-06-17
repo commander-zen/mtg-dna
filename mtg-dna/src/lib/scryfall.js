@@ -5,6 +5,17 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// ── Invalid-query error ─────────────────────────────────────────────────────────
+// Scryfall answers a malformed query with HTTP 400/422 and a human `details`
+// message ("Expected a colon…"). Tag the thrown error so callers can tell
+// "your syntax is wrong" apart from "valid query, zero results" and surface it
+// — bad syntax must never fail silently and read like a bug.
+function invalidQueryError(details) {
+  const err = new Error(details || "Invalid search syntax.");
+  err.code = "invalid_query";
+  return err;
+}
+
 // ── Image helpers ─────────────────────────────────────────────────────────────
 export function getCardImage(card, size = "normal") {
   if (card.image_uris) return card.image_uris[size] ?? card.image_uris.normal;
@@ -52,6 +63,11 @@ export async function searchCommanders(query, options = {}) {
       )}&order=edhrec&unique=cards`,
       { headers: { "User-Agent": UA }, signal: options.signal }
     );
+    if (res.status === 400 || res.status === 422) {
+      const json = await res.json().catch(() => ({}));
+      options.onInvalid?.(json.details ?? "");
+      return [];
+    }
     if (!res.ok) return [];
     const json = await res.json();
     return (json.data ?? []).slice(0, 8);
@@ -178,9 +194,9 @@ export async function fetchFirstPageForSwipe(query, commanderCard = null, option
     throw new Error("Network error.");
   }
   if (res.status === 404) throw new Error("No cards found for that query.");
-  if (res.status === 422) {
+  if (res.status === 400 || res.status === 422) {
     const json = await res.json().catch(() => ({}));
-    throw new Error(json.details ?? "Invalid query syntax.");
+    throw invalidQueryError(json.details);
   }
   if (!res.ok) throw new Error(`Scryfall error: ${res.status}`);
   const json = await res.json();
@@ -219,9 +235,9 @@ export async function fetchForSwipe(query, commanderCard = null, options = {}) {
       throw new Error("Network error.");
     }
     if (res.status === 404) throw new Error("No cards found for that query.");
-    if (res.status === 422) {
+    if (res.status === 400 || res.status === 422) {
       const json = await res.json().catch(() => ({}));
-      throw new Error(json.details ?? "Invalid query syntax.");
+      throw invalidQueryError(json.details);
     }
     if (!res.ok) throw new Error(`Scryfall error: ${res.status}`);
     const json = await res.json();

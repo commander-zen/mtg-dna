@@ -7,8 +7,19 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
   const { theme, mode } = useTheme();
   const [query, setQuery]     = useState("");
   const [results, setResults] = useState([]);
+  const [toast, setToast]     = useState(null);
   const abortRef = useRef(null);
   const inputRef = useRef(null);
+  const toastTimerRef = useRef(null);
+
+  // Brief dimmed flash. Only invalid syntax toasts here — a valid query with
+  // no matches is the normal "still typing" state, shown as an empty list.
+  function showToast(msg) {
+    setToast(msg);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2400);
+  }
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   const textColor   = mode === "light" ? theme.ink   : theme.white;
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
@@ -31,7 +42,13 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       try {
-        const data = await searchCommanders(query, { signal: ctrl.signal });
+        const data = await searchCommanders(query, {
+          signal: ctrl.signal,
+          onInvalid: (details) => {
+            if (ctrl.signal.aborted) return;
+            showToast(details && details.length <= 80 ? details : "invalid search");
+          },
+        });
         if (!ctrl.signal.aborted) setResults(data);
       } catch { /* aborted or network error */ }
     }, 300);
@@ -128,6 +145,20 @@ export default function AddLegendSheet({ open, onClose, onSelect }) {
               }}
             />
           </div>
+
+          {/* Invalid-syntax flash — empty results stay a silent empty list. */}
+          {toast && (
+            <div style={{
+              margin: "0 20px 8px",
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              lineHeight: 1.4,
+              color: dimColor,
+            }}>
+              {toast}
+            </div>
+          )}
 
           <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 20px" }}>
             {results.map(card => (

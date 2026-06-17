@@ -77,8 +77,10 @@ export default function SwipeScreen({
   const [flipped,      setFlipped]      = useState(false);
   const [searchOpen,   setSearchOpen]   = useState(false);
   const [searchText,   setSearchText]   = useState("");
+  const [toast,        setToast]        = useState(null);
 
   const searchInputRef    = useRef(null);
+  const toastTimerRef     = useRef(null);
   const didMountRef       = useRef(false);
   const dragStartRef      = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -363,11 +365,31 @@ export default function SwipeScreen({
     if (searchOpen) setSearchOpen(false);
     else openInlineSearch();
   }
-  function submitInlineSearch() {
+  // Brief dimmed flash, mirroring the app's toast grammar — auto-clears.
+  function showToast(msg) {
+    setToast(msg);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2400);
+  }
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
+
+  async function submitInlineSearch() {
     const q = searchText.trim();
     if (!q) return;
+    // A bad query used to re-seed into nothing and leave a dead stack — looked
+    // like a bug. Await the re-seed and surface why it failed: invalid syntax
+    // (echo Scryfall's reason if short) vs a valid-but-empty result.
+    const result = await onInlineSearch?.(q);
+    if (result && result.ok === false) {
+      if (result.kind === "invalid") {
+        const d = result.message;
+        showToast(d && d.length <= 80 ? d : "invalid search");
+      } else {
+        showToast("no cards found");
+      }
+      return; // keep the field open so the query can be fixed
+    }
     setSearchOpen(false);
-    onInlineSearch?.(q);
   }
 
   // Reserve space for the header block (back button + tally + stack info)
@@ -725,6 +747,31 @@ export default function SwipeScreen({
               fontSize: 16, letterSpacing: 3, cursor: "pointer",
             }}
           >SEARCH MORE</button>
+        </div>
+      )}
+
+      {/* Search feedback — brief dimmed flash above the bottom controls so an
+          invalid/empty query never fails silently. */}
+      {toast && (
+        <div style={{
+          position: "absolute",
+          left: "50%",
+          bottom: "calc(env(safe-area-inset-bottom) + 64px)",
+          transform: "translateX(-50%)",
+          zIndex: 6,
+          maxWidth: "84vw",
+          background: "rgba(0,0,0,0.8)",
+          color: "rgba(255,255,255,0.85)",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          letterSpacing: "0.06em",
+          lineHeight: 1.4,
+          textAlign: "center",
+          padding: "8px 14px",
+          border: "1px solid rgba(255,255,255,0.15)",
+          pointerEvents: "none",
+        }}>
+          {toast}
         </div>
       )}
 

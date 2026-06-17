@@ -529,7 +529,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       // trusted alone, matching the auto-seed path above.
       const finalQuery = session ? withColorIdentity(q, legendColorIdentity) : q;
       const { cards } = await fetchFirstPageForSwipe(finalQuery, null, { order, dir });
-      if (!cards.length) throw new Error("No cards found for that query.");
       // Decided cards (this session or earlier) never re-queue, no matter how
       // the queue was re-seeded — skipped/browsed cards are unaffected.
       const filtered = cards.filter(c => !decidedNamesRef.current.has(c.name));
@@ -539,8 +538,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       setSwipeCards(filtered);
       setSwipeIndex(0);
       setBrewView("swipe");
+      return { ok: true };
     } catch (err) {
       setError(err.message);
+      // Distinguish malformed syntax (echo Scryfall's reason) from a valid
+      // query that simply matched nothing, so callers can toast the right
+      // thing instead of failing silently.
+      const kind = err.code === "invalid_query" ? "invalid" : "empty";
+      return { ok: false, kind, message: err.message };
     } finally {
       setLoading(false);
     }

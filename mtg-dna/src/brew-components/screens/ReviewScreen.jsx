@@ -313,9 +313,12 @@ export default function ReviewScreen({
       paddingBottom: SAFE_BOTTOM,
     }}>
 
-      {/* Commander anchor — sticky so the deck is always identifiable. Padded
-          left of the brew back chevron so the two never overlap. */}
-      {showAnchor && (
+      {/* Frozen header — the commander anchor AND the WREC band stay pinned to
+          the top of the scrolling list (spreadsheet top-row behavior), so the
+          deck stays identifiable and its composition readable as rows scroll
+          beneath. Safe-area top inset respected; the content below clears it at
+          rest so the first row is never hidden under the header. */}
+      {live && (
         <div style={{
           position: "sticky",
           top: 0,
@@ -324,6 +327,9 @@ export default function ReviewScreen({
           background: "var(--bg)",
           borderBottom: "1px solid var(--bevel-dark)",
         }}>
+          {/* Commander anchor — padded left of the brew back chevron so the
+              two never overlap. */}
+          {showAnchor && (
           <div style={{
             maxWidth: 430,
             margin: "0 auto",
@@ -371,13 +377,36 @@ export default function ReviewScreen({
               {deckCount}/{DECK_GATE}
             </div>
           </div>
+          )}
+
+          {/* WREC composition band — frozen with the anchor. Counts per
+              category (by quantity). Multi-tag so they can exceed deck size; a
+              0 reads dimmed as a structural gap. */}
+          <div style={{
+            maxWidth: 430,
+            margin: "0 auto",
+            display: "flex", flexWrap: "wrap", alignItems: "center",
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11,
+            paddingLeft: 20, paddingRight: 20,
+            paddingTop: showAnchor ? 8 : "calc(env(safe-area-inset-top) + 10px)",
+            paddingBottom: 8,
+            borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
+          }}>
+            {wrecCounts.map(({ tag, label, n }, i) => (
+              <span key={tag} style={{ whiteSpace: "nowrap" }}>
+                {i > 0 && <span style={{ color: "var(--muted)", margin: "0 6px" }}>·</span>}
+                <span style={{ color: n === 0 ? "var(--muted)" : "var(--text)" }}>{label} {n}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
       <div style={{
         width: "100%",
         maxWidth: 430,
-        padding: showAnchor ? "20px 20px 40px" : `${SAFE_TOP} 20px 40px`,
+        padding: live ? "20px 20px 40px" : `${SAFE_TOP} 20px 40px`,
         display: "flex",
         flexDirection: "column",
         gap: 20,
@@ -392,25 +421,6 @@ export default function ReviewScreen({
             color: "var(--text)",
           }}>
             {live ? "DECK" : "REVIEW"} · {totalCards} CARD{totalCards !== 1 ? "S" : ""}
-          </div>
-        )}
-
-        {/* WREC composition band — counts per category (by quantity). Multi-tag
-            so they can exceed deck size; a 0 reads dimmed as a structural gap. */}
-        {live && (
-          <div style={{
-            display: "flex", flexWrap: "wrap", alignItems: "center",
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 11,
-            paddingBottom: 8,
-            borderBottom: "1px solid var(--bevel-dark)",
-          }}>
-            {wrecCounts.map(({ tag, label, n }, i) => (
-              <span key={tag} style={{ whiteSpace: "nowrap" }}>
-                {i > 0 && <span style={{ color: "var(--muted)", margin: "0 6px" }}>·</span>}
-                <span style={{ color: n === 0 ? "var(--muted)" : "var(--text)" }}>{label} {n}</span>
-              </span>
-            ))}
           </div>
         )}
 

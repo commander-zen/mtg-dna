@@ -211,6 +211,49 @@ function withColorIdentity(q, colorIdentity) {
   return `${q} legal:commander ci<=${ci}`.trim();
 }
 
+// ── Per-legend brew-session resume ──────────────────────────────────────────
+// Transient swipe-session view state — the active seed/search and the queue
+// position — persisted to localStorage keyed by legend id, so reopening a
+// legend lands exactly where the user left off. This is view state ONLY: the
+// deck itself persists independently via flick-is-a-write to deck_cards and is
+// never touched here (or by expiry). Stale sessions (>30d) are discarded so the
+// queue re-fetches against current card data.
+const BREW_SESSION_PREFIX = "magicdex-brew-session:";
+const BREW_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function brewSessionKey(legendId) {
+  return `${BREW_SESSION_PREFIX}${legendId}`;
+}
+
+// Returns the persisted session, or null if absent/corrupt/expired. Expired
+// sessions are cleared on read — reopening then starts a fresh default seed.
+function loadBrewSession(legendId) {
+  if (!legendId) return null;
+  try {
+    const raw = localStorage.getItem(brewSessionKey(legendId));
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || typeof s.lastActive !== "number" ||
+        Date.now() - s.lastActive > BREW_SESSION_TTL_MS) {
+      localStorage.removeItem(brewSessionKey(legendId));
+      return null;
+    }
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function saveBrewSession(legendId, state) {
+  if (!legendId) return;
+  try {
+    localStorage.setItem(
+      brewSessionKey(legendId),
+      JSON.stringify({ ...state, lastActive: Date.now() }),
+    );
+  } catch { /* storage full/disabled — resume is best-effort */ }
+}
+
 // Collapse instances to (card_name, section) rows with quantities for deck_cards.
 function buildCardRows(deckId, boards) {
   const rows = [];
@@ -323,6 +366,12 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       if (cancelled) return;
       setLegendColorIdentity(colorIdentity);
 
+      // Resume the exact session left behind (same seed/search + queue
+      // position) if one is persisted and unexpired; loadBrewSession returns
+      // null (and clears the key) past the 30-day TTL, dropping us onto a fresh
+      // default seed instead.
+      const persisted = loadBrewSession(session.legend.id);
+
       // Deck row is a door: opening a deck from LegendIdentity lands directly
       // on its live review, not the swipe carousel. The queue still seeds in
       // the background (excluding everything already in the deck) so review's
@@ -330,9 +379,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       if (session.startView === "review") {
         setReviewOrigin("legend");
         setBrewView("review");
-        await seedSwipeQueue(colorIdentity, existingRows, { setView: false });
+        await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted, { setView: false });
       } else {
-        await seedSwipeQueue(colorIdentity, existingRows);
+        await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted);
       }
     })();
     return () => { cancelled = true; };
@@ -371,6 +420,57 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       setLoading(false);
     }
   }
+
+  // Resume the persisted seed/search + queue position when one survives; on any
+  // failure (no session, a seed that now errors or returns nothing) fall back
+  // to a fresh default seed so the user is never stranded on a broken stack.
+  async function resumeOrSeedSwipeQueue(colorIdentity, excludeRows, persisted, opts = {}) {
+    if (persisted && await tryResumeSwipeQueue(colorIdentity, excludeRows, persisted, opts)) return;
+    await seedSwipeQueue(colorIdentity, excludeRows, opts);
+  }
+
+  // Rebuild the queue from a persisted session: same seed/search, same order,
+  // same position (clamped — the existing dedupe still drops cards decked since,
+  // so the queue may have shrunk). Returns false (no state mutated past the
+  // fetch) if the seed now errors or comes back empty, so the caller can seed a
+  // fresh default instead.
+  async function tryResumeSwipeQueue(colorIdentity, excludeRows, persisted, { setView = true } = {}) {
+    setLoading(true);
+    setError(null);
+    try {
+      const order    = persisted.order ?? getBrewDefaults().sort;
+      const dir      = persisted.dir ?? "asc";
+      const rawQuery = persisted.query ?? "";
+      const q = withColorIdentity(rawQuery, colorIdentity);
+      const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
+      const exclude = new Set([...excludeRows.map(r => r.card_name), ...decidedNamesRef.current]);
+      const filtered = cards.filter(c => !exclude.has(c.name));
+      if (!filtered.length) return false; // empty/stale → fall back to default seed
+      setQuery(rawQuery);
+      setSwipeOrder(order);
+      setSwipeDir(dir);
+      setSwipeCards(filtered);
+      const idx = Number.isFinite(persisted.index) ? persisted.index : 0;
+      setSwipeIndex(Math.max(0, Math.min(idx, filtered.length - 1)));
+      if (setView) setBrewView("swipe");
+      return true;
+    } catch {
+      return false; // invalid/network error → fall back to default seed
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Persist the live session's transient view state (seed + queue position) per
+  // legend on every change, so reopening resumes exactly here. Only once a real
+  // queue exists, to avoid clobbering a good saved session with empty pre-seed
+  // state on mount. The deck is NOT here — it persists via deck_cards writes.
+  useEffect(() => {
+    if (!session?.legend?.id || swipeCards.length === 0) return;
+    saveBrewSession(session.legend.id, {
+      query, order: swipeOrder, dir: swipeDir, index: swipeIndex,
+    });
+  }, [session, query, swipeOrder, swipeDir, swipeIndex, swipeCards.length]);
 
   // A flick is a write: each decklist/maybe decision (and its undo) is
   // queued and applied to deck_cards immediately, fire-and-forget, so the

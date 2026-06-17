@@ -102,6 +102,46 @@ export async function fetchCardIdentity(name, options = {}) {
   }
 }
 
+// ── Single per-card data resolver ─────────────────────────────────────────────
+// One door for "give me this card's gameplay data, by name." Today it resolves
+// against the live API (exact → fuzzy via fetchCardIdentity), but it is the
+// seam the planned Supabase bulk-data cache slots behind: when that lands, this
+// helper reads our DB first and only falls through to the live fetch on a miss
+// (see DATA_SOURCES.md — cache locally, this is the intended architecture).
+//
+// Until then it stays a good citizen the hard way: every unique name is fetched
+// at most once (memoized), and live lookups are chained behind a politeness
+// delay so a deck's worth of rows resolves as a throttled stream, never a burst.
+// Returns the card object or null (never throws) — a null is the caller's cue to
+// show "card data unavailable" rather than a blank.
+const SCRYFALL_CARD_DELAY = 100;
+const cardDataCache    = new Map();   // lowercased name → resolved card | null
+const cardDataInFlight = new Map();   // lowercased name → Promise<card | null>
+let   cardFetchTail    = Promise.resolve();
+
+export function getCardData(name, options = {}) {
+  const key = (name ?? "").trim().toLowerCase();
+  if (!key) return Promise.resolve(null);
+  if (cardDataCache.has(key))    return Promise.resolve(cardDataCache.get(key));
+  if (cardDataInFlight.has(key)) return cardDataInFlight.get(key);
+
+  // FUTURE: read the local bulk cache here first; only the miss path below
+  // should ever touch api.scryfall.com.
+  const p = cardFetchTail
+    .catch(() => {})
+    .then(() => fetchCardIdentity(name, options))
+    .then(card => {
+      cardDataCache.set(key, card ?? null);
+      cardDataInFlight.delete(key);
+      return card ?? null;
+    });
+  // Re-arm the tail with the delay regardless of outcome, so the next lookup
+  // still waits its turn even if this one rejected.
+  cardFetchTail = p.then(() => sleep(SCRYFALL_CARD_DELAY), () => sleep(SCRYFALL_CARD_DELAY));
+  cardDataInFlight.set(key, p);
+  return p;
+}
+
 // ── Single page fetch ─────────────────────────────────────────────────────────
 export async function fetchFirstPage(query, options = {}) {
   const { signal } = options;

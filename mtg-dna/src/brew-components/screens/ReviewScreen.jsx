@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCardData, formatManaCost } from "../../lib/scryfall.js";
 
 // Spine screens pad for the notch (top, clearing the back chevron) and the
 // home indicator (bottom) now that no tab bar absorbs the bottom.
@@ -17,6 +18,31 @@ const WREC_CHIPS = [
   { tag: "plan",            label: "PLAN" },
 ];
 const LABEL_BY_TAG = Object.fromEntries(WREC_CHIPS.map(c => [c.tag, c.label]));
+
+// Type-line display rule (mirrors LegendIdentity): every legal commander is a
+// "Legendary Creature — X", so the lead words are dead weight; show the subtypes
+// after the em dash. Non-creatures (planeswalker/Background) keep the full line
+// so nothing reads blank.
+function displayType(typeLine) {
+  if (!typeLine) return "";
+  return (/creature/i.test(typeLine) && typeLine.includes("—"))
+    ? (typeLine.split("—")[1]?.trim() || typeLine)
+    : typeLine;
+}
+
+// Oracle text, DFC-aware: join both faces so the user judges the whole card.
+function oracleOf(card) {
+  if (!card) return "";
+  if (card.oracle_text) return card.oracle_text;
+  if (card.card_faces?.length)
+    return card.card_faces.map(f => f.oracle_text).filter(Boolean).join("\n\n//\n\n");
+  return "";
+}
+
+// Mana cost, DFC-aware — front face carries the cast cost.
+function manaOf(card) {
+  return formatManaCost(card?.mana_cost ?? card?.card_faces?.[0]?.mana_cost);
+}
 
 // Review the accumulated swipe results before saving. Purely presentational —
 // the Supabase writes live in the page that owns the brew state (Brew.jsx),
@@ -44,11 +70,35 @@ export default function ReviewScreen({
   // over always-on chips so five 44px targets fit mobile width cleanly and
   // untagged cards stay chip-free (no "uncategorized" noise).
   const [expandedKey, setExpandedKey] = useState(null);
+  // Per-card gameplay data (type/mana/oracle), keyed by name. deck_cards only
+  // stores name+quantity, so anything richer is fetched on demand — tagging a
+  // card with no visible context is guesswork. undefined = not yet resolved,
+  // null = name couldn't resolve (show "card data unavailable"), object = card.
+  const [cardData, setCardData] = useState({});
 
   const groups = {
     decklist: groupByName(decklist),
     maybe: groupByName(maybeboard),
   };
+
+  // Resolve every listed card's data through the one cache-ready helper. It
+  // memoizes and throttles internally, so requesting the whole list here costs
+  // each unique name a single (delayed) lookup — and slots behind the future
+  // local cache without touching this screen.
+  useEffect(() => {
+    const names = [...groups.decklist, ...groups.maybe].map(c => c.name);
+    let cancelled = false;
+    for (const name of names) {
+      if (cardData[name] !== undefined) continue;
+      getCardData(name).then(card => {
+        if (cancelled) return;
+        setCardData(prev => (prev[name] !== undefined ? prev : { ...prev, [name]: card }));
+      });
+    }
+    return () => { cancelled = true; };
+    // groups is derived from decklist/maybeboard; cardData is intentionally
+    // omitted (the setter guards against clobbering already-resolved entries).
+  }, [decklist, maybeboard]); // eslint-disable-line react-hooks/exhaustive-deps
   // Count toward the 100-card gate, matching deckTotal everywhere else: every
   // instance across the boards + the commander (never written to deck_cards).
   const deckCount = decklist.length + maybeboard.length + 1;
@@ -104,6 +154,12 @@ export default function ReviewScreen({
             const key = `${sectionKey}:${name}`;
             const tags = cardTags?.[key]?.tags ?? [];
             const expanded = expandedKey === key;
+            const card = cardData[name];               // undefined | null | object
+            const resolved = card !== undefined;       // a lookup has come back
+            const unavailable = resolved && card === null;
+            const type = card ? displayType(card.type_line) : "";
+            const mana = card ? manaOf(card) : "";
+            const oracle = card ? oracleOf(card) : "";
             return (
               <div key={name}>
                 {/* Tapping the row (live) opens its WREC chip selector. */}
@@ -124,10 +180,38 @@ export default function ReviewScreen({
                 >
                   <span style={{
                     flex: 1, minWidth: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}>{name}</span>
+                    display: "flex", flexDirection: "column", gap: 2,
+                  }}>
+                    <span style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>{name}</span>
+                    {/* Context subline — type (subtypes per the display rule) +
+                        mana, dimmed mono. A name that won't resolve says so
+                        rather than reading as a blank/broken row. */}
+                    {unavailable ? (
+                      <span style={{
+                        fontFamily: "'Noto Sans Mono', monospace",
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}>card data unavailable</span>
+                    ) : (type || mana) ? (
+                      <span style={{
+                        fontFamily: "'Noto Sans Mono', monospace",
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}>
+                        {type.toLowerCase()}{type && mana ? "  ·  " : ""}{mana}
+                      </span>
+                    ) : null}
+                  </span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                     {/* Active tags, compact, when collapsed — untagged shows nothing */}
                     {!expanded && tags.length > 0 && (
@@ -163,6 +247,22 @@ export default function ReviewScreen({
                     )}
                   </div>
                 </div>
+
+                {/* Oracle text — shown only while tagging, so the WREC role can
+                    be judged without leaving the screen. Body font for
+                    readability, dimmed, line breaks preserved. */}
+                {live && expanded && oracle && (
+                  <div style={{
+                    fontFamily: "'Noto Sans', sans-serif",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    color: "var(--text2)",
+                    whiteSpace: "pre-wrap",
+                    padding: "2px 0 8px",
+                  }}>
+                    {oracle}
+                  </div>
+                )}
 
                 {/* WREC chip selector — five 44px multi-select chips */}
                 {live && expanded && (

@@ -1,3 +1,5 @@
+import { supabase } from "./supabase.js";
+
 const UA = "DeckStack/1.0 (deck-stack.vercel.app)";
 
 // ── Sleep helper ──────────────────────────────────────────────────────────────
@@ -97,14 +99,89 @@ export async function fetchCardByName(name, options = {}) {
   return res.json();
 }
 
-// ── Identity backfill — exact match, then fuzzy; null (not throw) if nothing matches ──
-export async function fetchCardIdentity(name, options = {}) {
+// ── Name-lookup cache plumbing (migration 007 `cards`) ───────────────────────
+// fetchCardIdentity is the one exact→fuzzy name lookup behind getCardData and
+// the legend identity backfill. It now reads the local gameplay cache FIRST and
+// only touches api.scryfall.com on a miss. SEARCH is unaffected: the carousel
+// seed and the inline/add-legend search keep using the live query API, because
+// the cache can't replicate Scryfall query syntax and proxying it would violate
+// DATA_SOURCES' "don't proxy" rule.
+
+const CARD_CACHE_COLS =
+  "oracle_id, scryfall_id, name, type_line, oracle_text, mana_cost, cmc, " +
+  "color_identity, layout, card_faces, image_normal, art_crop";
+
+// A cache row → the Scryfall-card shape callers already expect (image_uris,
+// card_faces, type_line, …), so getCardImage/manaOf/oracleOf work unchanged.
+function cacheRowToCard(row) {
+  const image_uris = (row.image_normal || row.art_crop)
+    ? { normal: row.image_normal ?? undefined, art_crop: row.art_crop ?? undefined }
+    : undefined;
+  return {
+    id: row.scryfall_id ?? undefined,
+    oracle_id: row.oracle_id,
+    name: row.name,
+    type_line: row.type_line ?? undefined,
+    oracle_text: row.oracle_text ?? undefined,
+    mana_cost: row.mana_cost ?? undefined,
+    cmc: row.cmc ?? undefined,
+    color_identity: row.color_identity ?? [],
+    layout: row.layout ?? undefined,
+    card_faces: row.card_faces ?? undefined,
+    image_uris,
+  };
+}
+
+// A live Scryfall card → a `cards` row (mirrors scripts/ingest-cards.mjs).
+function cardToCacheRow(c) {
+  if (!c?.oracle_id) return null;
+  const faces = c.card_faces ?? null;
+  const topImg = c.image_uris ?? null;
+  const faceImg = faces?.[0]?.image_uris ?? null;
+  return {
+    oracle_id: c.oracle_id,
+    scryfall_id: c.id ?? null,
+    name: c.name,
+    name_lower: (c.name ?? "").toLowerCase(),
+    type_line: c.type_line ?? null,
+    oracle_text: c.oracle_text ?? null,
+    mana_cost: c.mana_cost ?? null,
+    cmc: c.cmc ?? null,
+    color_identity: c.color_identity ?? [],
+    layout: c.layout ?? null,
+    card_faces: faces,
+    image_normal: topImg?.normal ?? faceImg?.normal ?? null,
+    art_crop: topImg?.art_crop ?? faceImg?.art_crop ?? null,
+  };
+}
+
+// Best-effort write-back so the next lookup of this name is instant. If anon
+// writes are blocked by RLS this simply no-ops — the live result is still
+// returned, and the service-key bulk ingest (npm run ingest:cards) remains the
+// authoritative populate path.
+function writeBackToCache(card) {
+  const row = cardToCacheRow(card);
+  if (!row) return;
+  supabase.from("cards").upsert(row, { onConflict: "oracle_id" }).then(() => {}, () => {});
+}
+
+// Live named lookups are serialized behind the ~100ms politeness delay so a
+// burst of cache misses can't exceed Scryfall's rate ceiling.
+const SCRYFALL_NAMED_DELAY = 100;
+let namedFetchTail = Promise.resolve();
+function serializeNamedFetch(fn) {
+  const run = namedFetchTail.catch(() => {}).then(fn);
+  namedFetchTail = run.then(() => sleep(SCRYFALL_NAMED_DELAY), () => sleep(SCRYFALL_NAMED_DELAY));
+  return run;
+}
+
+async function liveNamedLookup(name, options) {
   try {
     const exact = await fetch(
       `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`,
       { headers: { "User-Agent": UA }, signal: options.signal }
     );
-    if (exact.ok) return exact.json();
+    if (exact.ok) { const card = await exact.json(); writeBackToCache(card); return card; }
     if (exact.status !== 404) return null;
 
     const fuzzy = await fetch(
@@ -112,28 +189,42 @@ export async function fetchCardIdentity(name, options = {}) {
       { headers: { "User-Agent": UA }, signal: options.signal }
     );
     if (!fuzzy.ok) return null;
-    return fuzzy.json();
+    const card = await fuzzy.json();
+    writeBackToCache(card);
+    return card;
   } catch {
     return null;
   }
 }
 
+// Cache-first identity lookup: local `cards` (case-insensitive exact on
+// name_lower) → live exact → live fuzzy. Returns the card object or null (never
+// throws), so a miss everywhere reads as "card data unavailable".
+export async function fetchCardIdentity(name, options = {}) {
+  const key = (name ?? "").trim().toLowerCase();
+  if (key) {
+    try {
+      const { data } = await supabase
+        .from("cards")
+        .select(CARD_CACHE_COLS)
+        .eq("name_lower", key)
+        .maybeSingle();
+      if (data) return cacheRowToCard(data);
+    } catch { /* cache unreachable — fall through to the live API */ }
+  }
+  return serializeNamedFetch(() => liveNamedLookup(name, options));
+}
+
 // ── Single per-card data resolver ─────────────────────────────────────────────
-// One door for "give me this card's gameplay data, by name." Today it resolves
-// against the live API (exact → fuzzy via fetchCardIdentity), but it is the
-// seam the planned Supabase bulk-data cache slots behind: when that lands, this
-// helper reads our DB first and only falls through to the live fetch on a miss
-// (see DATA_SOURCES.md — cache locally, this is the intended architecture).
-//
-// Until then it stays a good citizen the hard way: every unique name is fetched
-// at most once (memoized), and live lookups are chained behind a politeness
-// delay so a deck's worth of rows resolves as a throttled stream, never a burst.
-// Returns the card object or null (never throws) — a null is the caller's cue to
-// show "card data unavailable" rather than a blank.
-const SCRYFALL_CARD_DELAY = 100;
+// One door for "give me this card's gameplay data, by name", used by the deck/
+// review tagging context. Resolution (cache-first, then a throttled live exact→
+// fuzzy + write-back) lives in fetchCardIdentity, so this layer only memoizes
+// resolved cards and de-dupes concurrent requests for the same name. With the
+// cache populated the common path is a single Supabase read and ZERO calls to
+// api.scryfall.com. Returns the card object or null — a null is the caller's cue
+// to show "card data unavailable" rather than a blank.
 const cardDataCache    = new Map();   // lowercased name → resolved card | null
 const cardDataInFlight = new Map();   // lowercased name → Promise<card | null>
-let   cardFetchTail    = Promise.resolve();
 
 export function getCardData(name, options = {}) {
   const key = (name ?? "").trim().toLowerCase();
@@ -141,19 +232,11 @@ export function getCardData(name, options = {}) {
   if (cardDataCache.has(key))    return Promise.resolve(cardDataCache.get(key));
   if (cardDataInFlight.has(key)) return cardDataInFlight.get(key);
 
-  // FUTURE: read the local bulk cache here first; only the miss path below
-  // should ever touch api.scryfall.com.
-  const p = cardFetchTail
-    .catch(() => {})
-    .then(() => fetchCardIdentity(name, options))
-    .then(card => {
-      cardDataCache.set(key, card ?? null);
-      cardDataInFlight.delete(key);
-      return card ?? null;
-    });
-  // Re-arm the tail with the delay regardless of outcome, so the next lookup
-  // still waits its turn even if this one rejected.
-  cardFetchTail = p.then(() => sleep(SCRYFALL_CARD_DELAY), () => sleep(SCRYFALL_CARD_DELAY));
+  const p = fetchCardIdentity(name, options).then(card => {
+    cardDataCache.set(key, card ?? null);
+    cardDataInFlight.delete(key);
+    return card ?? null;
+  });
   cardDataInFlight.set(key, p);
   return p;
 }

@@ -1,3 +1,27 @@
+# magıcdex (React + Vite)
+
+## Card cache ingestion (manual)
+
+`npm run ingest:cards` downloads Scryfall's `oracle_cards` bulk file (~168 MB)
+and upserts it into the Supabase `cards` table (migration 007) — the local
+gameplay cache that name lookups read before falling back to the live API.
+
+Run it **manually from a dev machine** after a set release to refresh the cache.
+It is **not** wired to any cron or deploy. It requires:
+
+- `SUPABASE_URL` (or the existing `VITE_SUPABASE_URL` is reused), and
+- `SUPABASE_SERVICE_KEY` — the Supabase **service-role** key (this is a
+  server-side bulk write that bypasses RLS; the anon key is not used).
+
+The service key must be supplied via env and **must never be committed** (`.env`
+is gitignored). Example:
+
+```sh
+SUPABASE_SERVICE_KEY=... npm run ingest:cards
+```
+
+---
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

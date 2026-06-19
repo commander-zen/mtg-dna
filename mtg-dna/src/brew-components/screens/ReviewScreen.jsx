@@ -314,7 +314,15 @@ export default function ReviewScreen({
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      overflowY: "auto",
+      // No overflow/scroll here on purpose: Brew.jsx's fixed `inset:0` takeover
+      // wrapper is the actual scrolling ancestor. Declaring overflowY:auto on
+      // this div too made IT the nearest CSS "scroll container" for the sticky
+      // header below — but since this div only has minHeight (no capped
+      // height), it always grows to fit its own content and never overflows
+      // itself, so the sticky child had no clipped viewport to stick against
+      // and just scrolled away with the page. Leaving scroll to the one
+      // ancestor that's actually viewport-bound lets position:sticky resolve
+      // against it correctly.
       paddingBottom: showBottomNav ? "calc(env(safe-area-inset-bottom) + 64px)" : SAFE_BOTTOM,
     }}>
 

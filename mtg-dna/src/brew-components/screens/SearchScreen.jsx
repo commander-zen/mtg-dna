@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings } from "../../lib/settings.js";
+import SearchChips from "../../components/SearchChips.jsx";
 
 // Spine screens pad for the notch (top) and home indicator (bottom) now that
 // no tab bar absorbs the bottom. The back chevron lives at the top-left inset.
@@ -143,6 +144,12 @@ export default function SearchScreen({ onSearch, loading, error, commanderCard, 
 
         {/* ── Spacer ── */}
         <div style={{ flex: 1 }} />
+
+        {/* ── Guided search chips — visual mount only; selecting a chip does
+              not yet affect the query below (next session's wiring). ── */}
+        <div style={{ marginBottom: 12 }}>
+          <SearchChips />
+        </div>
 
         {/* ── Input ── */}
         <div style={{ marginBottom: 0 }}>

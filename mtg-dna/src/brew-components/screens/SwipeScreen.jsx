@@ -34,7 +34,7 @@ export default function SwipeScreen({
   cards, pile, onPileChange,
   maybeboard, onMaybeboardChange,
   decklist = [], onDecklistChange,
-  onGoToPile, onExit, onGoToSearch, onSearchMore, commanderCard, onCommanderCardChange,
+  onGoToPile, onExit, onGoToSearch, onSearchMore, commanderCard,
   initialIndex, onIndexChange,
   swipeOrder = "name", swipeDir = "desc", onSortChange,
   onGoToBrews,

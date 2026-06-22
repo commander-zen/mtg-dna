@@ -6,7 +6,7 @@ import { BREW_TOOLS } from "../data/tools";
 import SearchScreen from "../brew-components/screens/SearchScreen.jsx";
 import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
-import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, LOKI_CLONE_QUERY } from "../lib/scryfall.js";
+import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
 import { tagCard, untagCard, fetchDeckCardsWithTags } from "../lib/deckTags.js";
 import { supabase } from "../lib/supabase.js";
@@ -70,124 +70,8 @@ const BREW_VARS = {
   "--space-6": "32px",
 };
 
-// Temporary dev seed — skips SearchScreen and swipes the hardcoded Loki queue.
+// Label used to recognize a Loki dev-seeded session for back-navigation targeting.
 const LOKI_SESSION_LABEL = "Loki, God of Mischief — oops all clones";
-
-const BREW_MODES = [
-  { key: "legend",    name: "New Legend",     desc: "Start fresh around a commander" },
-  { key: "import",    name: "Import Deck",    desc: "Bring in a Moxfield or Archidekt URL" },
-  { key: "pile",      name: "Free Pile",      desc: "No commander, just building a stack" },
-  { key: "discovery", name: "Card Discovery", desc: "Browse and swipe without a goal" },
-];
-
-// PageHeader pattern on the fixed dark palette. The shared component reads
-// useTheme(), which would follow the app's light mode in here.
-function BrewModeSelect({ onSelect, onDevSeed, devLoading, devError }) {
-  return (
-    <div style={{ padding: "28px 20px 40px", maxWidth: 430, margin: "0 auto" }}>
-      <div style={{ marginBottom: 32 }}>
-        <div style={{
-          fontFamily: "'Noto Sans', sans-serif",
-          fontSize: 10,
-          fontWeight: 500,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: BREW.dim,
-          marginBottom: 4,
-        }}>
-          Helix
-        </div>
-        <div style={{
-          fontFamily: "'Noto Sans', sans-serif",
-          fontSize: 28,
-          fontWeight: 300,
-          letterSpacing: "0.02em",
-          color: BREW.text,
-          lineHeight: 1.1,
-        }}>
-          brew
-        </div>
-        <div style={{ width: 32, height: 1, background: BREW.amber, marginTop: 10 }} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {BREW_MODES.map((m, i) => (
-          <div
-            key={m.key}
-            onClick={() => onSelect(m.key)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "14px 0",
-              borderBottom: i < BREW_MODES.length - 1 ? `1px solid ${BREW.border}` : "none",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                fontSize: 15,
-                fontWeight: 400,
-                color: BREW.text,
-                lineHeight: 1.2,
-                marginBottom: 3,
-              }}>
-                {m.name}
-              </div>
-              <div style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                fontSize: 12,
-                fontWeight: 300,
-                color: `${BREW.text}60`,
-                lineHeight: 1.5,
-              }}>
-                {m.desc}
-              </div>
-            </div>
-            <span
-              className="material-symbols-rounded"
-              style={{
-                flexShrink: 0,
-                fontSize: 16,
-                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-                color: BREW.dim,
-              }}
-            >
-              arrow_forward
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Temporary fourth-wall dev seed — remove once real search flows land */}
-      <div
-        onClick={() => { if (!devLoading) onDevSeed(); }}
-        style={{
-          marginTop: 36,
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 12,
-          color: BREW.dim,
-          cursor: devLoading ? "default" : "pointer",
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        {devLoading ? "// Loki test session — loading…" : "// Loki test session"}
-      </div>
-      {devError && (
-        <div style={{
-          marginTop: 8,
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 11,
-          color: BREW.red,
-        }}>
-          {devError}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Inverse of buildCardRows: expand a deck's existing deck_cards rows back
 // into per-instance card entries for a given section, so the swipe tally
@@ -849,25 +733,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
           </button>
         )}
 
-        {brewView === "modes" && (
-          <BrewModeSelect
-            onSelect={(key) => {
-              setBrewMode(key);
-              setBrewView("search");
-            }}
-            onDevSeed={() => runSearch(LOKI_CLONE_QUERY, swipeOrder, swipeDir, LOKI_SESSION_LABEL)}
-            devLoading={loading}
-            devError={error}
-          />
-        )}
-
         {brewView === "search" && (
           <SearchScreen
             onSearch={runSearch}
             loading={loading}
             error={error}
-            commanderCard={null}
-            onCommanderCardChange={() => {}}
             initialQuery={query}
           />
         )}
@@ -886,7 +756,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
             commanderCard={sessionLabel ? { name: sessionLabel } : null}
-            onCommanderCardChange={() => {}}
             initialIndex={swipeIndex}
             onIndexChange={setSwipeIndex}
             swipeOrder={swipeOrder}

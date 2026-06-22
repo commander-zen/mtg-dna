@@ -66,7 +66,7 @@ function splitLandFilter(q) {
   return { clean, includeLands: !has };
 }
 
-export default function SearchScreen({ onSearch, loading, error, commanderCard, onCommanderCardChange, initialQuery }) {
+export default function SearchScreen({ onSearch, loading, error, initialQuery }) {
   const initial = splitLandFilter(initialQuery);
   const [brewInput,    setBrewInput]    = useState(initial.clean);
   const [includeLands, setIncludeLands] = useState(initial.includeLands);

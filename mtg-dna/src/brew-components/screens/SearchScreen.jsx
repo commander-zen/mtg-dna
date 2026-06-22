@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings } from "../../lib/settings.js";
 import SearchChips from "../../components/SearchChips.jsx";
+import { SEARCH_CHIPS } from "../../data/searchChips.js";
 
 // Spine screens pad for the notch (top) and home indicator (bottom) now that
 // no tab bar absorbs the bottom. The back chevron lives at the top-left inset.
@@ -66,17 +67,34 @@ function splitLandFilter(q) {
   return { clean, includeLands: !has };
 }
 
+// A chip's tags are OR'd together within the chip, parenthesized so the
+// group binds as one unit once ANDed against the raw text and other chips.
+function chipExpression(chip) {
+  return `(${chip.tags.map(t => `otag:${t}`).join(" or ")})`;
+}
+
 export default function SearchScreen({ onSearch, loading, error, initialQuery }) {
   const initial = splitLandFilter(initialQuery);
-  const [brewInput,    setBrewInput]    = useState(initial.clean);
-  const [includeLands, setIncludeLands] = useState(initial.includeLands);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [draftInput,   setDraftInput]   = useState("");
+  const [brewInput,     setBrewInput]     = useState(initial.clean);
+  const [includeLands,  setIncludeLands]  = useState(initial.includeLands);
+  const [historyIndex,  setHistoryIndex]  = useState(-1);
+  const [draftInput,    setDraftInput]    = useState("");
+  const [selectedChips, setSelectedChips] = useState(new Set());
   const [rawMode] = useState(() => getSettings().rawQueryMode);
   const inputRef = useRef(null);
 
   const isDisabled = loading;
-  const canSearch = !isDisabled && (!includeLands || Boolean(brewInput.trim()));
+  const hasChips = selectedChips.size > 0;
+  const canSearch = !isDisabled && (!includeLands || Boolean(brewInput.trim()) || hasChips);
+
+  function toggleChip(id) {
+    setSelectedChips(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Pre-fill with the session's active query, cursor at the end — never a
   // blank box when a query is already active.
@@ -90,7 +108,13 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
   function handleSearch() {
     if (isDisabled) return;
     const input = brewInput.trim();
-    const finalQuery = includeLands ? input : `${input} -t:land`.trim();
+    // Selected chips AND together (each chip's own tags OR'd within it), then
+    // AND onto the raw text — the whole thing still flows through onSearch
+    // exactly like a typed-only query, so the color-identity wrapper (applied
+    // by the caller) and the lands toggle both still apply unchanged.
+    const chipParts = SEARCH_CHIPS.filter(c => selectedChips.has(c.id)).map(chipExpression);
+    const combined = [input, ...chipParts].filter(Boolean).join(" ");
+    const finalQuery = includeLands ? combined : `${combined} -t:land`.trim();
     if (!finalQuery) return;
     if (input) saveToHistory(input);
     setHistoryIndex(-1);
@@ -145,10 +169,10 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
         {/* ── Spacer ── */}
         <div style={{ flex: 1 }} />
 
-        {/* ── Guided search chips — visual mount only; selecting a chip does
-              not yet affect the query below (next session's wiring). ── */}
+        {/* ── Guided search chips — selected chips fold into the compiled
+              query on SEARCH (see handleSearch); toggling alone runs nothing. ── */}
         <div style={{ marginBottom: 12 }}>
-          <SearchChips />
+          <SearchChips selected={selectedChips} onToggle={toggleChip} />
         </div>
 
         {/* ── Input ── */}

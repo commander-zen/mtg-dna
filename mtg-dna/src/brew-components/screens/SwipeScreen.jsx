@@ -40,7 +40,6 @@ export default function SwipeScreen({
   onGoToBrews,
   onCardCommit, reconnecting,
   onDoubleTag,
-  query, onInlineSearch,
 }) {
   // Cards already sorted into a pile/decklist/maybeboard leave the carousel
   // entirely — decided cards never reappear when browsing back.
@@ -75,12 +74,7 @@ export default function SwipeScreen({
   const [imgError,     setImgError]     = useState(false);
   const [cardExpanded, setCardExpanded] = useState(false);
   const [flipped,      setFlipped]      = useState(false);
-  const [searchOpen,   setSearchOpen]   = useState(false);
-  const [searchText,   setSearchText]   = useState("");
-  const [toast,        setToast]        = useState(null);
 
-  const searchInputRef    = useRef(null);
-  const toastTimerRef     = useRef(null);
   const didMountRef       = useRef(false);
   const dragStartRef      = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -349,48 +343,6 @@ export default function SwipeScreen({
   const handleDoubleTap = useDoubleTap(() => {
     if (card?.card_faces?.length > 1) setFlipped(f => !f);
   });
-
-  // Inline search in the bottom bar — expands over the gesture hint (never the
-  // back button), pre-filled with the active query. Enter submits + re-seeds;
-  // the right control cancels (returns the hint); the × clears the text.
-  function openInlineSearch() {
-    setSearchText(query ?? "");
-    setSearchOpen(true);
-    setTimeout(() => {
-      const el = searchInputRef.current;
-      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
-    }, 0);
-  }
-  function toggleInlineSearch() {
-    if (searchOpen) setSearchOpen(false);
-    else openInlineSearch();
-  }
-  // Brief dimmed flash, mirroring the app's toast grammar — auto-clears.
-  function showToast(msg) {
-    setToast(msg);
-    clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 2400);
-  }
-  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
-
-  async function submitInlineSearch() {
-    const q = searchText.trim();
-    if (!q) return;
-    // A bad query used to re-seed into nothing and leave a dead stack — looked
-    // like a bug. Await the re-seed and surface why it failed: invalid syntax
-    // (echo Scryfall's reason if short) vs a valid-but-empty result.
-    const result = await onInlineSearch?.(q);
-    if (result && result.ok === false) {
-      if (result.kind === "invalid") {
-        const d = result.message;
-        showToast(d && d.length <= 80 ? d : "invalid search");
-      } else {
-        showToast("no cards found");
-      }
-      return; // keep the field open so the query can be fixed
-    }
-    setSearchOpen(false);
-  }
 
   // Reserve space for the header block (back button + tally + stack info)
   // and the bottom gesture legend — the card track centers in what's left.
@@ -760,35 +712,9 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* Search feedback — brief dimmed flash above the bottom controls so an
-          invalid/empty query never fails silently. */}
-      {toast && (
-        <div style={{
-          position: "absolute",
-          left: "50%",
-          bottom: "calc(env(safe-area-inset-bottom) + 64px)",
-          transform: "translateX(-50%)",
-          zIndex: 6,
-          maxWidth: "84vw",
-          background: "rgba(0,0,0,0.8)",
-          color: "rgba(255,255,255,0.85)",
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 12,
-          letterSpacing: "0.06em",
-          lineHeight: 1.4,
-          textAlign: "center",
-          padding: "8px 14px",
-          border: "1px solid rgba(255,255,255,0.15)",
-          pointerEvents: "none",
-        }}>
-          {toast}
-        </div>
-      )}
-
       {/* ── Bottom controls — lock-screen grammar: BACK bottom-left, SEARCH
-            bottom-right, gesture hint between. Tapping search expands a field
-            over the hint (never over the back button). Back is always
-            reachable, even in the done state. ── */}
+            bottom-right, gesture hint between. Tapping search navigates to the
+            full SearchScreen. Back is always reachable, even in the done state. ── */}
       <div style={{
         position: "absolute",
         left: 0, right: 0,
@@ -812,48 +738,8 @@ export default function SwipeScreen({
           <span className="material-symbols-rounded" style={{ fontSize: 22 }}>arrow_back</span>
         </button>
 
-        {/* Middle — gesture hint, or the expanded search field */}
-        {!done && (searchOpen ? (
-          <div style={{
-            flex: 1, minWidth: 0,
-            display: "flex", alignItems: "center",
-            height: 44,
-            background: "rgba(0,0,0,0.55)",
-            border: "1px solid rgba(255,255,255,0.15)",
-          }}>
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") submitInlineSearch(); }}
-              placeholder="scryfall query…"
-              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-              enterKeyHint="search"
-              style={{
-                flex: 1, minWidth: 0, height: "100%",
-                background: "transparent", border: "none", outline: "none",
-                color: "#fff",
-                fontFamily: "var(--font-system)", fontSize: 16,
-                padding: "0 10px",
-              }}
-            />
-            {searchText && (
-              <button
-                onClick={() => { setSearchText(""); searchInputRef.current?.focus(); }}
-                aria-label="Clear search"
-                style={{
-                  width: 44, height: 44, flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "none", padding: 0,
-                  color: "rgba(255,255,255,0.6)", cursor: "pointer",
-                }}
-              >
-                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>close</span>
-              </button>
-            )}
-          </div>
-        ) : (
+        {/* Middle — gesture hint */}
+        {!done && (
           <div style={{
             flex: 1, minWidth: 0,
             textAlign: "center",
@@ -866,14 +752,13 @@ export default function SwipeScreen({
           }}>
             {"← browse →  ↑ mainboard  ↓ maybe"}
           </div>
-        ))}
+        )}
 
-        {/* SEARCH — bottom-right, ≥44px. Opens the field; when open, cancels
-            (returns the hint). Submit is on Enter. */}
+        {/* SEARCH — bottom-right, ≥44px. Navigates to the full SearchScreen. */}
         {!done && (
           <button
-            onClick={toggleInlineSearch}
-            aria-label={searchOpen ? "Close search" : "Search"}
+            onClick={onGoToSearch}
+            aria-label="Search"
             style={{
               width: 44, height: 44, flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -882,9 +767,7 @@ export default function SwipeScreen({
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}
           >
-            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>
-              {searchOpen ? "close" : "search"}
-            </span>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
           </button>
         )}
       </div>

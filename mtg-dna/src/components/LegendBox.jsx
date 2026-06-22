@@ -139,8 +139,6 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     return () => { cancelled = true; };
   }, [legends]);
 
-  if (loading) return null;
-
   const safeBox = Math.min(box, boxCount - 1);
   const atFirst = safeBox <= 0;
   const atLast  = safeBox >= boxCount - 1;
@@ -211,6 +209,17 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
       }}>
         {Array.from({ length: PAGE_SIZE }).map((_, i) => {
           const g = safeBox * PAGE_SIZE + i;
+
+          // Skeleton slot — legends still loading, never the bare box frame alone.
+          if (loading) {
+            return (
+              <div
+                key={`skeleton-${i}`}
+                aria-hidden="true"
+                style={{ ...slotBase, background: slotBg, opacity: 0.5 }}
+              />
+            );
+          }
 
           // Filled slot — a legend.
           if (g < legends.length) {

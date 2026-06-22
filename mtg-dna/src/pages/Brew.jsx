@@ -787,15 +787,74 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   }
 
   // In the magicdex IA, Brew is only ever launched with a session — the
-  // session-init effect flips brewView off "shell" on the next tick. Hold the
-  // dark takeover meanwhile rather than flashing the legacy tool landing.
+  // session-init effect flips brewView off "shell" on the next tick, while
+  // deck_cards/color-identity fetches are still in flight. The commander's
+  // name/art come straight off the session prop with no fetch needed, so the
+  // anchor paints immediately instead of holding a bare dark rectangle.
   if (session) {
     return (
       <div style={{
         position: "fixed", inset: 0, zIndex: 50,
         background: BREW.base,
         ...BREW_VARS,
-      }} />
+        display: "flex", flexDirection: "column", alignItems: "center",
+        paddingTop: "calc(env(safe-area-inset-top) + 10px)",
+      }}>
+        <div style={{
+          width: "100%", maxWidth: 430,
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "0 20px 16px",
+        }}>
+          <div style={{
+            width: 56, height: 56, flexShrink: 0,
+            borderRadius: "5.5% / 4%",
+            overflow: "hidden",
+            background: BREW.surface,
+          }}>
+            {session.legend.image_uri && (
+              <img
+                src={session.legend.image_uri}
+                alt={session.legend.name}
+                draggable={false}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            )}
+          </div>
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontFamily: "'Zilla Slab', serif",
+            fontSize: 18,
+            color: BREW.text,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {session.legend.name}
+          </div>
+        </div>
+        <div style={{
+          width: "100%", maxWidth: 430,
+          padding: "0 20px",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 12,
+          color: BREW.dim,
+          marginBottom: 16,
+        }}>
+          loading deck…
+        </div>
+        <div style={{
+          width: "100%", maxWidth: 430,
+          padding: "0 20px",
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} style={{
+              height: 14,
+              borderRadius: 2,
+              background: BREW.surface,
+              opacity: 1 - i * 0.1,
+            }} />
+          ))}
+        </div>
+      </div>
     );
   }
 

@@ -3,26 +3,26 @@ export const SEARCH_CHIPS = [
   {
     id: "tokens",
     label: "Tokens",
-    query: "(otag:repeatable-creature-tokens or otag:synergy-token or otag:repeatable-token-generator)",
+    tags: ["repeatable-creature-tokens", "synergy-token", "repeatable-token-generator"],
   },
   {
     id: "plus1_counters",
     label: "+1/+1 Counters",
-    query: "(otag:repeatable-pp-counters or otag:gives-pp-counters)",
+    tags: ["repeatable-pp-counters", "gives-pp-counters"],
   },
   {
     id: "artifacts",
     label: "Artifacts",
-    query: "(otag:sacrifice-outlet-artifact or otag:synergy-artifact or otag:karnstructs or otag:repeatable-artifact-tokens or otag:synergy-artifact-creature)",
+    tags: ["sacrifice-outlet-artifact", "synergy-artifact", "karnstructs", "repeatable-artifact-tokens", "synergy-artifact-creature"],
   },
   {
     id: "lifegain",
     label: "Lifegain",
-    query: "(otag:lifegain-to-damage or otag:lifegain-matters or otag:lifegain or otag:repeatable-lifegain)",
+    tags: ["lifegain-to-damage", "lifegain-matters", "lifegain", "repeatable-lifegain"],
   },
   {
     id: "aggro",
     label: "Aggro",
-    query: "(otag:attack-trigger or otag:attacking-matters-self or otag:attacking-matters)",
+    tags: ["attack-trigger", "attacking-matters-self", "attacking-matters"],
   },
 ];

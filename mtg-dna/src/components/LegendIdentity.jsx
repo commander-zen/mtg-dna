@@ -2,15 +2,9 @@ import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase.js";
 import { fetchCardByName, getCardImage, formatManaCost } from "../lib/scryfall.js";
+import { deckTotal, resolveLegendDeck } from "../lib/legendDeck.js";
 
 const DECK_GATE = 100;
-
-// A deck's total = sum of deck_cards quantities + 1 for the commander
-// (the commander itself is never written to deck_cards).
-function deckTotal(deck) {
-  const cardSum = (deck.deck_cards ?? []).reduce((sum, dc) => sum + (dc.quantity ?? 0), 0);
-  return cardSum + 1;
-}
 
 // The detail pane of the storage-box Home: the selected commander as a
 // device readout. LEFT = the actual card image ("sprite"); RIGHT = stacked
@@ -63,14 +57,12 @@ export default function LegendIdentity({ legend, onBrew }) {
     : typeLine;
   const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost ?? legend.mana_cost);
 
-  // One legend → one deck by design; for the readout use the fullest deck.
-  const primary = decks.reduce(
-    (best, d) => (best === null || deckTotal(d) > deckTotal(best) ? d : best),
-    null
-  );
-  const total = primary ? deckTotal(primary) : 0;
+  // ONE definition of "this legend's deck" — the deck row and the brew
+  // button below both use this same resolved deck, so they can never again
+  // point at different rows. See lib/legendDeck.js for the resolution rule.
+  const deck = resolveLegendDeck(decks);
+  const total = deck ? deckTotal(deck) : 0;
   const complete = total >= DECK_GATE;
-  const inProgressDeck = decks.find(d => deckTotal(d) < DECK_GATE) ?? null;
 
   const field = (label, value, valueColor) => (
     <div style={{ minWidth: 0 }}>
@@ -165,7 +157,7 @@ export default function LegendIdentity({ legend, onBrew }) {
               {manaCost || "—"}
             </div>
           </div>
-          {field("status", primary?.status)}
+          {field("status", deck?.status)}
           {field("deck", `${total}/${DECK_GATE}`, complete ? ruleColor : textColor)}
         </div>
       </div>
@@ -176,13 +168,13 @@ export default function LegendIdentity({ legend, onBrew }) {
           "no deck yet" with 0/100 in the same footprint, non-interactive. */}
       <div style={{ flexShrink: 0, paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
         <div
-          onClick={primary ? () => onBrew(legend, primary, { startView: "review" }) : undefined}
+          onClick={deck ? () => onBrew(legend, deck, { startView: "review" }) : undefined}
           style={{
             display: "flex", alignItems: "center", gap: 10,
             minHeight: 36,
             padding: "6px 0",
             borderTop: `1px solid ${borderColor}`,
-            cursor: primary ? "pointer" : "default",
+            cursor: deck ? "pointer" : "default",
             WebkitTapHighlightColor: "transparent",
           }}
         >
@@ -190,10 +182,10 @@ export default function LegendIdentity({ legend, onBrew }) {
             flex: 1, minWidth: 0,
             fontFamily: "'Noto Sans', sans-serif",
             fontSize: 13,
-            color: primary ? textColor : dimColor,
+            color: deck ? textColor : dimColor,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
-            {primary ? (primary.build_name || legend.name) : "no deck yet"}
+            {deck ? (deck.build_name || legend.name) : "no deck yet"}
           </div>
           <div style={{
             fontFamily: "'Noto Sans Mono', monospace",
@@ -205,14 +197,14 @@ export default function LegendIdentity({ legend, onBrew }) {
           </div>
           <span
             className="material-symbols-rounded"
-            style={{ fontSize: 16, color: dimColor, flexShrink: 0, opacity: primary ? 1 : 0.35 }}
+            style={{ fontSize: 16, color: dimColor, flexShrink: 0, opacity: deck ? 1 : 0.35 }}
           >
             chevron_right
           </span>
         </div>
 
         <button
-          onClick={() => onBrew(legend, inProgressDeck)}
+          onClick={() => onBrew(legend, deck)}
           onPointerDown={() => setBrewPressed(true)}
           onPointerUp={() => setBrewPressed(false)}
           onPointerLeave={() => setBrewPressed(false)}

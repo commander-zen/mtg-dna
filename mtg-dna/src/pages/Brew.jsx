@@ -9,6 +9,7 @@ import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
 import { tagCard, untagCard, fetchDeckCardsWithTags } from "../lib/deckTags.js";
+import { fetchLegendDeck } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -208,10 +209,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSessionLabel(session.legend.name);
     let cancelled = false;
     (async () => {
-      // Flick-is-a-write: the session's deck must exist before any swipe can
-      // land, so create it now if the legend has no in-progress deck yet —
-      // matched on legend_id, never a name-insert.
-      let deckId = session.deckId;
+      // Resolve the legend's one deck from the same shared source every
+      // surface uses (lib/legendDeck.js) — never trust session.deckId, which
+      // may be stale by the time this effect runs. Flick-is-a-write: the
+      // session's deck must exist before any swipe can land, so create it
+      // now if the legend truly has none yet — matched on legend_id, never
+      // a name-insert.
+      const existingDeck = await fetchLegendDeck(session.legend.id);
+      let deckId = existingDeck?.id ?? null;
       if (!deckId) {
         const { data: deck, error: deckError } = await supabase
           .from("decks")

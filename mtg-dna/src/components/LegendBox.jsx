@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
+import { fetchLegendDeck } from "../lib/legendDeck.js";
 import AddLegendSheet from "./AddLegendSheet";
 
 const DECK_GATE = 100;
@@ -104,11 +105,11 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     await loadLegends();
   }
 
-  // Paste-import: upsert the legend → create its deck → bulk-insert the
-  // resolved decklist + WREC tags (mirrors Brew.jsx's handleConfirmSave
-  // legend/deck-creation pattern, but the cards/tags come pre-parsed from
-  // moxfieldImport.js instead of an in-progress swipe session). Left open
-  // so AddLegendSheet can show the parse/commander UI and a result summary
+  // Paste-import: upsert the legend → resolve its ONE deck (never insert a
+  // second row for a legend that already has one — mirrors the guard
+  // Brew.jsx's session-init uses via the same lib/legendDeck.js resolver) →
+  // merge the resolved decklist + WREC tags into it. Left open so
+  // AddLegendSheet can show the parse/commander UI and a result summary
   // before closing itself — this never closes the sheet or selects the
   // legend on its own.
   async function handleImportDeck(commanderName, lines) {
@@ -135,41 +136,81 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
       } catch { /* best-effort identity backfill */ }
     }
 
-    const { data: deck, error: deckError } = await supabase
-      .from("decks")
-      .insert({ legend: commanderName, legend_id: legend.id, status: "Active" })
-      .select()
-      .single();
-    if (deckError) throw deckError;
+    // A legend can have at most one deck. Resolve the existing one (if any)
+    // through the same shared lookup every other surface uses, and only
+    // insert a fresh deck row when the legend truly has none yet.
+    const existingDeck = await fetchLegendDeck(legend.id);
+    let deckId = existingDeck?.id;
+    if (!deckId) {
+      const { data: deck, error: deckError } = await supabase
+        .from("decks")
+        .insert({ legend: commanderName, legend_id: legend.id, status: "Active" })
+        .select()
+        .single();
+      if (deckError) throw deckError;
+      deckId = deck.id;
+    }
 
-    const cardRows = lines.map(l => ({
-      deck_id: deck.id, card_name: l.name, quantity: l.quantity, section: "decklist",
-    }));
+    // Merge into the resolved deck: a card already present (by name) has its
+    // quantity SET to the freshly-pasted total (re-importing reconciles
+    // toward "this is my decklist now", not an additive stack-on-top — a
+    // second paste of the same list must not double quantities). A card not
+    // yet present is inserted. Cards already in the deck but absent from
+    // this import are left untouched — merge only ever adds/updates here,
+    // never deletes.
+    const { data: existingRows, error: existingRowsError } = await supabase
+      .from("deck_cards")
+      .select("id, card_name, quantity")
+      .eq("deck_id", deckId);
+    if (existingRowsError) throw existingRowsError;
+    const existingByName = new Map(existingRows.map(r => [r.card_name.toLowerCase(), r]));
+
+    const toInsert = lines.filter(l => !existingByName.has(l.name.toLowerCase()));
+    const toUpdate = lines.filter(l => existingByName.has(l.name.toLowerCase()));
 
     const insertedCards = [];
-    for (let i = 0; i < cardRows.length; i += 100) {
+    for (let i = 0; i < toInsert.length; i += 100) {
+      const rows = toInsert.slice(i, i + 100).map(l => ({
+        deck_id: deckId, card_name: l.name, quantity: l.quantity, section: "decklist",
+      }));
       const { data, error: cardError } = await supabase
         .from("deck_cards")
-        .insert(cardRows.slice(i, i + 100))
+        .insert(rows)
         .select("id, card_name");
       if (cardError) throw cardError;
       insertedCards.push(...data);
     }
 
+    for (const line of toUpdate) {
+      const existing = existingByName.get(line.name.toLowerCase());
+      const { error: updateError } = await supabase
+        .from("deck_cards")
+        .update({ quantity: line.quantity })
+        .eq("id", existing.id);
+      if (updateError) throw updateError;
+    }
+
+    // Tags union onto whichever deck_card_id each line resolved to — never
+    // removed on re-import, only added. Idempotent via the (deck_card_id,
+    // tag) unique constraint, so re-importing the same tag never errors.
     const tagRows = [];
     for (const inserted of insertedCards) {
       const line = lines.find(l => l.name === inserted.card_name);
       for (const tag of (line?.tags ?? [])) tagRows.push({ deck_card_id: inserted.id, tag });
     }
+    for (const line of toUpdate) {
+      const existing = existingByName.get(line.name.toLowerCase());
+      for (const tag of (line.tags ?? [])) tagRows.push({ deck_card_id: existing.id, tag });
+    }
     for (let i = 0; i < tagRows.length; i += 100) {
       const { error: tagError } = await supabase
         .from("deck_card_tags")
-        .insert(tagRows.slice(i, i + 100));
+        .upsert(tagRows.slice(i, i + 100), { onConflict: "deck_card_id,tag" });
       if (tagError) throw tagError;
     }
 
     await loadLegends();
-    return { cardCount: cardRows.length, taggedCount: tagRows.length };
+    return { cardCount: toInsert.length + toUpdate.length, taggedCount: tagRows.length };
   }
 
   // Lazily heal legends saved without Scryfall identity (no art_crop/oracle

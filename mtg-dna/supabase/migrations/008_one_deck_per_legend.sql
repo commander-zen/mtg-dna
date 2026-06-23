@@ -1,0 +1,32 @@
+-- 008_one_deck_per_legend.sql — enforce one-deck-per-legend at the schema level
+-- Run manually in the Supabase SQL editor (this project's schema lives in the
+-- dashboard; there is no CLI migration history).
+--
+-- UNRUN. Do not apply yet.
+--
+-- A legend forked into two `decks` rows once already (the paste-import path
+-- inserted a fresh deck instead of reusing the legend's existing one — fixed
+-- in LegendBox.jsx's handleImportDeck, which now merges into the resolved
+-- deck via lib/legendDeck.js instead of inserting a second row). This
+-- constraint is the backstop: even if a future bug reintroduces a forking
+-- write path, the database rejects it outright instead of silently creating
+-- a second row for the same legend.
+--
+-- PRECONDITION — this migration WILL FAIL if any legend currently has more
+-- than one deck row. Confirm zero duplicates before running:
+--
+--   select legend_id, count(*)
+--   from decks
+--   where legend_id is not null
+--   group by legend_id
+--   having count(*) > 1;
+--
+-- As of this writing that query returns 3 legends beyond the already-fixed
+-- Zhulodok fork (Loki: 3 rows, Hawkeye, Young Avenger: 2 rows, Loki, the
+-- Deceiver: 2 rows) — each needs the same reconciliation Zhulodok got
+-- (confirm the canonical deck, merge or discard the rest) before this
+-- ALTER TABLE can succeed. Re-run the query above after reconciling; only
+-- apply this migration once it returns zero rows.
+
+alter table decks
+  add constraint decks_legend_id_unique unique (legend_id);

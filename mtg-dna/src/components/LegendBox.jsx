@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
-import { fetchLegendDeck } from "../lib/legendDeck.js";
+import { deckTotal, fetchLegendDeck, resolveLegendDeck } from "../lib/legendDeck.js";
 import AddLegendSheet from "./AddLegendSheet";
 
 const DECK_GATE = 100;
@@ -18,13 +18,6 @@ const BOX_KEY = "magicdex-box";
 // the art — never a CSS filter on the image. Desaturating Scryfall art
 // violates their image terms (see DATA_SOURCES.md); the img stays untouched.
 const GATE_SCRIM = "rgba(10,14,26,0.55)";
-
-// A deck's total = sum of deck_cards quantities + 1 for the commander
-// (the commander itself is never written to deck_cards).
-function deckTotal(deck) {
-  const cardSum = (deck.deck_cards ?? []).reduce((sum, dc) => sum + (dc.quantity ?? 0), 0);
-  return cardSum + 1;
-}
 
 export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSignal, activeId }) {
   const { theme, mode } = useTheme();
@@ -333,9 +326,8 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
           // Filled slot — a legend.
           if (g < legends.length) {
             const legend = legends[g];
-            const highest = (legend.decks ?? []).reduce(
-              (max, d) => Math.max(max, deckTotal(d)), 0
-            );
+            const legendDeck = resolveLegendDeck(legend.decks);
+            const highest = legendDeck ? deckTotal(legendDeck) : 0;
             const gated = highest < DECK_GATE;
             const art = legend.image_uri;
             const noIdentity = !art && identityFailed.has(legend.id);

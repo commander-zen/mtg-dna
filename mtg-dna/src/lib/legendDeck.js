@@ -7,6 +7,16 @@ export function deckTotal(deck) {
   return cardSum + 1;
 }
 
+// PostgREST embed shape for `decks(...)` off `legends` flips between an
+// array and a single object/null depending on whether it infers the
+// relationship as to-many or to-one — and it inferred to-one the moment the
+// decks_legend_id_unique constraint landed (one-deck-per-legend). Every
+// caller here still gets whatever shape a given query returned, so normalize
+// before treating it as a list.
+function toDeckArray(decks) {
+  return Array.isArray(decks) ? decks : decks ? [decks] : [];
+}
+
 // The ONE definition of "this legend's deck" — every surface (the deck row,
 // the brew button, Brew.jsx's session-init) must call this instead of
 // inventing its own pick. One-deck-per-legend is the intended invariant
@@ -16,7 +26,7 @@ export function deckTotal(deck) {
 // deck deterministically, so two surfaces reading the same legend can never
 // disagree about which row is "the" deck.
 export function resolveLegendDeck(decks) {
-  return (decks ?? []).reduce(
+  return toDeckArray(decks).reduce(
     (best, d) => (best === null || deckTotal(d) > deckTotal(best) ? d : best),
     null
   );
@@ -32,5 +42,5 @@ export async function fetchLegendDeck(legendId) {
     .eq("id", legendId)
     .single();
   if (error) return null;
-  return resolveLegendDeck(data?.decks ?? []);
+  return resolveLegendDeck(data?.decks);
 }

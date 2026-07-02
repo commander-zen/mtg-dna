@@ -127,14 +127,6 @@ async function main() {
     const tags = await fetchTaggerTags(p.set, p.number, session);
     console.log(`${p.name} [${p.set}/${p.number}] → ${tags.length} oracle tags: ${tags.join(", ")}`);
 
-    if (!DRY_RUN) {
-      await writeCardTags(
-        supabase,
-        tags.map(tag => ({ oracle_id: p.oracle_id, tag, source: "tagger-card-page", updated_at: runIso })),
-        { pruneEq: { oracle_id: p.oracle_id, source: "tagger-card-page" }, runIso },
-      );
-    }
-
     // ── Step 4: card pool for the legend's tags the taxonomy doesn't cover ──
     for (const tag of tags.filter(t => !TAXONOMY_TAGS.has(t))) {
       const { ids, total, pages } = await fetchOtagOracleIds(tag, {
@@ -146,6 +138,18 @@ async function main() {
         supabase,
         ids.map(oracle_id => ({ oracle_id, tag, source: "otag-search", updated_at: runIso })),
         { pruneEq: { tag, source: "otag-search" }, runIso },
+      );
+    }
+
+    // Profile rows LAST: a legend usually appears inside its own tags' pools,
+    // and the pool upsert would flip the shared (oracle_id, tag) row's source
+    // back to 'otag-search' if it wrote after this (caught on the first live
+    // run — Hawkeye's 5 profile rows all lost their provenance).
+    if (!DRY_RUN) {
+      await writeCardTags(
+        supabase,
+        tags.map(tag => ({ oracle_id: p.oracle_id, tag, source: "tagger-card-page", updated_at: runIso })),
+        { pruneEq: { oracle_id: p.oracle_id, source: "tagger-card-page" }, runIso },
       );
     }
 

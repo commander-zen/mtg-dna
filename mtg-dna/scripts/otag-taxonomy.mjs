@@ -72,6 +72,13 @@ export const TAG_BLOCKLIST = [
   /^filterout/,
   /^activated-ability$/,
   /^triggered-ability$/,
+  // flavor/catalog taxonomies, not deck themes (leaked via Captain America's
+  // page on the first live run: "alliteration" alone is a 4,169-card tag of
+  // cards whose NAMES alliterate)
+  /^alliteration$/,
+  /^card-names$/,
+  /^personal-text$/,
+  /^face-commander$/,
 ];
 
 export function isBlockedTag(slug) {

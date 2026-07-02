@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase.js";
-import { fetchCardByName, getCardImage, formatManaCost } from "../lib/scryfall.js";
+import { getCardData, getCardImage, formatManaCost } from "../lib/scryfall.js";
 import { deckTotal, resolveLegendDeck } from "../lib/legendDeck.js";
 
 const DECK_GATE = 100;
@@ -22,11 +22,15 @@ export default function LegendIdentity({ legend, onBrew }) {
   const borderColor = mode === "light" ? theme.border : theme.muted;
   const plateBg     = mode === "light" ? theme.paper : theme.surface;
 
+  // Cache-first (memoized) lookup — this used to hit live api.scryfall.com on
+  // every legend select, which made the detail pane's sprite the slowest thing
+  // on the Home surface. getCardData reads the local cards cache and only
+  // falls to the live API on a true miss.
   useEffect(() => {
     let cancelled = false;
     setOracleCard(null);
-    fetchCardByName(legend.name)
-      .then(card => { if (!cancelled) setOracleCard(card); })
+    getCardData(legend.name)
+      .then(card => { if (!cancelled && card) setOracleCard(card); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [legend.name]);

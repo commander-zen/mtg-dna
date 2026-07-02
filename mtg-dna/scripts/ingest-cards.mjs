@@ -87,6 +87,9 @@ function mapCard(c) {
     // migration 009 — Scryfall ships EDHREC rank on every card object, so the
     // brew stack's default ordering costs zero extra requests.
     edhrec_rank: c.edhrec_rank ?? null,
+    // migration 010 — the oracle bulk includes un-sets/banned/Alchemy cards;
+    // brew_stack filters on this so the stack never deals illegal cards.
+    legal_commander: c.legalities?.commander === "legal",
     updated_at: new Date().toISOString(),
   };
 }

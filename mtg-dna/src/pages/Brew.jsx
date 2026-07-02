@@ -6,7 +6,7 @@ import { BREW_TOOLS } from "../data/tools";
 import SearchScreen from "../brew-components/screens/SearchScreen.jsx";
 import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
-import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
+import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, fetchBrewStack } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
 import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard } from "../lib/deckTags.js";
 import { fetchLegendDeck, deleteLegend } from "../lib/legendDeck.js";
@@ -94,6 +94,28 @@ function expandRows(rows, section) {
 function withColorIdentity(q, colorIdentity) {
   const ci = colorIdentity?.length ? colorIdentity.join("").toLowerCase() : "c";
   return `${q} legal:commander ci<=${ci}`.trim();
+}
+
+// A query is "default seed" when the user typed nothing — it's either empty or
+// just the exclude-lands marker the seed itself added. Only these queries are
+// eligible for the legend-relevant RPC stack; anything typed goes to live
+// Scryfall search as always.
+function isDefaultSeedQuery(q) {
+  return q === "" || q === "-t:land";
+}
+
+// The RPC stack arrives EDHREC-ordered; name/CMC preferences re-sort it
+// client-side (the live-search path sorts server-side via the order param
+// instead, and edhrec_rank rides on RPC cards so even EDHREC can re-sort
+// locally after a name/CMC detour).
+function sortStack(cards, order, dir = "asc") {
+  const mul = dir === "desc" ? -1 : 1;
+  const key = order === "edhrec"
+    ? (a, b) => (a.edhrec_rank ?? Infinity) - (b.edhrec_rank ?? Infinity)
+    : order === "cmc"
+      ? (a, b) => (a.cmc ?? 0) - (b.cmc ?? 0)
+      : (a, b) => a.name.localeCompare(b.name);
+  return [...cards].sort((a, b) => mul * key(a, b));
 }
 
 // ── Per-legend brew-session resume ──────────────────────────────────────────
@@ -276,9 +298,30 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     return () => { cancelled = true; };
   }, [session]);
 
-  // legal:commander ci<=<identity> -t:land, ordered by edhrec popularity —
-  // dev seed for the legend-attached session's initial queue. Cards already
-  // in the attached deck are filtered out client-side.
+  // One door for the no-query default stack: the legend-relevant RPC first
+  // (brew_stack — cards sharing the legend's own Tagger-page tags, EDHREC-
+  // ordered, from our DB), falling back to the generic live Scryfall seed when
+  // the legend has no tag profile yet or the RPC fails. Typed queries never
+  // come here — they stay on live search.
+  async function fetchDefaultStack(colorIdentity, order, dir, excludeLands) {
+    if (session?.legend?.name) {
+      const stack = await fetchBrewStack({
+        legendName: session.legend.name,
+        colorIdentity,
+        excludeLands,
+      });
+      // Already-in-deck cards are excluded client-side by every caller (same
+      // as the live path), so p_deck_id isn't needed here.
+      if (stack.length) return order === "edhrec" ? stack : sortStack(stack, order, dir);
+    }
+    const q = withColorIdentity(excludeLands ? "-t:land" : "", colorIdentity);
+    const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
+    return cards;
+  }
+
+  // Default seed for the legend-attached session's initial queue — relevance-
+  // first via fetchDefaultStack. Cards already in the attached deck are
+  // filtered out client-side.
   async function seedSwipeQueue(colorIdentity, excludeRows = [], { setView = true } = {}) {
     setLoading(true);
     setError(null);
@@ -287,8 +330,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       // (EDHREC + exclude-lands by default); per-session controls still override.
       const defaults = getBrewDefaults();
       const rawQuery = defaults.excludeLands ? "-t:land" : "";
-      const q = withColorIdentity(rawQuery, colorIdentity);
-      const { cards } = await fetchFirstPageForSwipe(q, null, { order: defaults.sort, dir: "asc" });
+      const cards = await fetchDefaultStack(colorIdentity, defaults.sort, "asc", defaults.excludeLands);
       if (!cards.length) throw new Error("No cards found for that query.");
       // Exclude every card already in the deck, on either board — recomputed
       // from live deck_cards on every entry, not just the session that first
@@ -330,8 +372,15 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const order    = persisted.order ?? getBrewDefaults().sort;
       const dir      = persisted.dir ?? "asc";
       const rawQuery = persisted.query ?? "";
-      const q = withColorIdentity(rawQuery, colorIdentity);
-      const { cards } = await fetchFirstPageForSwipe(q, null, { order, dir });
+      // A resumed default seed goes back through the relevance stack, not the
+      // generic live search — otherwise reopening a legend would silently swap
+      // its tag-filtered stack for an unfiltered one.
+      let cards;
+      if (isDefaultSeedQuery(rawQuery)) {
+        cards = await fetchDefaultStack(colorIdentity, order, dir, rawQuery === "-t:land");
+      } else {
+        ({ cards } = await fetchFirstPageForSwipe(withColorIdentity(rawQuery, colorIdentity), null, { order, dir }));
+      }
       const exclude = new Set([...excludeRows.map(r => r.card_name), ...decidedNamesRef.current]);
       const filtered = cards.filter(c => !exclude.has(c.name));
       if (!filtered.length) return false; // empty/stale → fall back to default seed
@@ -588,6 +637,15 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   function handleSortChange(order, dir) {
     setSwipeOrder(order);
     setSwipeDir(dir);
+    // An RPC-seeded relevance stack re-sorts in place (its cards carry
+    // matched_tags + edhrec_rank) — re-running the generic live search here
+    // would silently swap the legend's tag-filtered stack for an unfiltered
+    // one. Undecided position resets to the top, matching the re-fetch paths.
+    if (session && isDefaultSeedQuery(query) && swipeCards.some(c => c.matched_tags)) {
+      setSwipeCards(sortStack(swipeCards, order, dir));
+      setSwipeIndex(0);
+      return;
+    }
     // Re-run on any active session even when the query is empty (lands-included
     // default seeds with no -t:land term) — the color-identity constraint alone
     // is a valid query.

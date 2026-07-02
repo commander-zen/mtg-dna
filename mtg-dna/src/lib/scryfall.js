@@ -102,10 +102,12 @@ export async function fetchCardByName(name, options = {}) {
 // ── Name-lookup cache plumbing (migration 007 `cards`) ───────────────────────
 // fetchCardIdentity is the one exact→fuzzy name lookup behind getCardData and
 // the legend identity backfill. It now reads the local gameplay cache FIRST and
-// only touches api.scryfall.com on a miss. SEARCH is unaffected: the carousel
-// seed and the inline/add-legend search keep using the live query API, because
-// the cache can't replicate Scryfall query syntax and proxying it would violate
-// DATA_SOURCES' "don't proxy" rule.
+// only touches api.scryfall.com on a miss. TYPED search is unaffected: the
+// inline/add-legend search keeps using the live query API, because the cache
+// can't replicate Scryfall query syntax and proxying it would violate
+// DATA_SOURCES' "don't proxy" rule. The carousel's DEFAULT seed, though, is
+// served from our DB via fetchBrewStack (migration 010) when the legend has a
+// tag profile.
 
 const CARD_CACHE_COLS =
   "oracle_id, scryfall_id, name, type_line, oracle_text, mana_cost, cmc, " +
@@ -282,6 +284,35 @@ export async function getCardDataBatch(names) {
 
   const misses = [...wanted.values()].flat();
   return { data, misses };
+}
+
+// ── Brew stack (migration 010 RPC) ───────────────────────────────────────────
+// The legend-relevant swipe stack, dealt entirely from our own DB: cards in
+// the legend's color identity sharing any of its Tagger-page tags
+// (card_tags), commander-legal, EDHREC-rank ordered. Each card carries
+// `matched_tags` — why it's in the stack. Returns [] on any failure or when
+// the legend has no tag profile yet (ingest-legend-tags hasn't run for it),
+// so callers can fall back to the generic live seed.
+export async function fetchBrewStack({ legendName, colorIdentity, deckId = null, excludeLands = true, limit = 400 }) {
+  const legend = await getCardData(legendName);
+  if (!legend?.oracle_id) return [];
+  try {
+    const { data, error } = await supabase.rpc("brew_stack", {
+      p_legend_oracle_id: legend.oracle_id,
+      p_color_identity: colorIdentity ?? [],
+      p_deck_id: deckId,
+      p_exclude_lands: excludeLands,
+      p_limit: limit,
+    });
+    if (error) return [];
+    return (data ?? []).map(row => ({
+      ...cacheRowToCard(row),
+      edhrec_rank: row.edhrec_rank ?? undefined,
+      matched_tags: row.matched_tags ?? [],
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // ── Single page fetch ─────────────────────────────────────────────────────────

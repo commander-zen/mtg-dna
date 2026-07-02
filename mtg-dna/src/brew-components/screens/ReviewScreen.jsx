@@ -83,6 +83,7 @@ export default function ReviewScreen({
   cardTags, onToggleTag,
   onBack, onHome,
   onDeleteDeck,
+  onMoveCard,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -360,6 +361,29 @@ export default function ReviewScreen({
                       );
                     })}
                   </div>
+                )}
+
+                {/* Move to the other board — direct, no remove + re-swipe
+                    round trip. A per-card secondary action, so it lives in
+                    the expanded panel below tagging; user-facing copy says
+                    "mainboard" even though the section value is decklist. */}
+                {live && expanded && onMoveCard && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
+                    style={{
+                      minHeight: 44,
+                      display: "flex", alignItems: "center", gap: 6,
+                      background: "transparent", border: "none", padding: 0,
+                      color: "var(--muted)",
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontSize: 11, letterSpacing: "0.08em",
+                      cursor: "pointer",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    <span className="material-symbols-rounded" style={{ fontSize: 16 }}>swap_vert</span>
+                    move to {sectionKey === "decklist" ? "maybeboard" : "mainboard"}
+                  </button>
                 )}
               </div>
             );

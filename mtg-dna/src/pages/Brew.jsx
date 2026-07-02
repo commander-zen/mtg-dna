@@ -8,7 +8,7 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
-import { tagCard, untagCard, fetchDeckCardsWithTags } from "../lib/deckTags.js";
+import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard } from "../lib/deckTags.js";
 import { fetchLegendDeck, deleteLegendDeck } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -430,6 +430,51 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     commitCard(card, section, -1);
   }
 
+  // Live review: move ALL copies of a card to the other board directly —
+  // no more remove + re-swipe round trip. The write is a section UPDATE on
+  // the existing deck_cards row (lib/deckTags.js), NOT a −qty/+qty through
+  // the flick-write queue: the delta path deletes the emptied row and 006's
+  // cascade would silently drop the card's WREC tags with it. Optimistic
+  // like tagging: instances and the keyed tag entry hop immediately, the
+  // exact prior state is restored on failure, and a successful move re-reads
+  // tags so ids/merges are authoritative.
+  async function handleMoveCard(name, from) {
+    if (!attachDeckId) return;
+    const to = from === "decklist" ? "maybe" : "decklist";
+    const [fromList, setFromList] = from === "decklist"
+      ? [decklist, setDecklist] : [maybeboard, setMaybeboard];
+    const [toList, setToList] = to === "decklist"
+      ? [decklist, setDecklist] : [maybeboard, setMaybeboard];
+    const moving = fromList.filter(c => c.name === name);
+    if (moving.length === 0) return;
+
+    const prevFrom = fromList, prevTo = toList, prevTags = cardTags;
+    setFromList(prevFrom.filter(c => c.name !== name));
+    setToList([...prevTo, ...moving]);
+    setCardTags(prev => {
+      const entry = prev[`${from}:${name}`];
+      if (!entry) return prev;
+      const next = { ...prev };
+      delete next[`${from}:${name}`];
+      const existing = prev[`${to}:${name}`];
+      next[`${to}:${name}`] = existing
+        ? { ...existing,
+            tags: [...new Set([...existing.tags, ...entry.tags])],
+            quantity: existing.quantity + entry.quantity }
+        : entry;
+      return next;
+    });
+
+    try {
+      await moveDeckCard(attachDeckId, name, from, to);
+      loadDeckTags(attachDeckId);
+    } catch {
+      setFromList(prevFrom);
+      setToList(prevTo);
+      setCardTags(prevTags);
+    }
+  }
+
   // Load every deck card's WREC tags when review opens (and on resume), keyed
   // for O(1) lookup by the review rows.
   async function loadDeckTags(deckId) {
@@ -798,6 +843,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             error={saveError}
             live={!!session}
             onRemove={handleRemoveCard}
+            onMoveCard={session ? handleMoveCard : undefined}
             commander={session ? { name: session.legend.name, art: session.legend.image_uri } : null}
             cardTags={cardTags}
             onToggleTag={handleToggleTag}

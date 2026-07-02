@@ -32,6 +32,24 @@ export function resolveLegendDeck(decks) {
   );
 }
 
+// Deleting a deck is TWO deletes in FK order: deck_cards first (their
+// deck_card_tags cascade at the schema level, migration 006), then the decks
+// row itself — deck_cards → decks has no cascade, so parent-first would be
+// rejected. The legend row is never touched: deleting the deck returns the
+// legend to the gated 0/100 "no deck yet" state, it does not leave the Box.
+export async function deleteLegendDeck(deckId) {
+  const { error: cardsError } = await supabase
+    .from("deck_cards")
+    .delete()
+    .eq("deck_id", deckId);
+  if (cardsError) throw cardsError;
+  const { error: deckError } = await supabase
+    .from("decks")
+    .delete()
+    .eq("id", deckId);
+  if (deckError) throw deckError;
+}
+
 // Live lookup behind the resolver — the one query every surface shares
 // instead of each re-deriving "this legend's deck" from whatever data it
 // happens to already have in hand (a stale prop, a handed-in deckId, etc).

@@ -9,7 +9,7 @@ import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
 import { tagCard, untagCard, fetchDeckCardsWithTags } from "../lib/deckTags.js";
-import { fetchLegendDeck } from "../lib/legendDeck.js";
+import { fetchLegendDeck, deleteLegendDeck } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -664,6 +664,24 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     onSessionDone?.();
   }
 
+  // Deleting the deck — the one destructive act in the app. Confirmed in
+  // ReviewScreen, executed here. Pending flick-writes are dropped first so a
+  // queued +1 can't land after (and be rejected by) the delete; the persisted
+  // swipe session is cleared so the next brew starts a fresh seed instead of
+  // resuming a queue deduped against cards that no longer exist; then the
+  // session exits to the Box, where the legend reads 0/100, "no deck yet".
+  // Throws on failure so ReviewScreen's confirm UI can surface the error.
+  async function handleDeleteDeck() {
+    if (!attachDeckId) return;
+    writeQueueRef.current = [];
+    await deleteLegendDeck(attachDeckId);
+    if (session?.legend?.id) {
+      try { localStorage.removeItem(brewSessionKey(session.legend.id)); } catch { /* best-effort */ }
+    }
+    resetBrew();
+    onSessionDone?.();
+  }
+
   // Hardware/browser Back must behave identically to the in-app chevron. While
   // the takeover is open we trap one synthetic history entry and route every
   // Back — hardware or chevron (via goBack → history.back) — through the same
@@ -785,6 +803,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onToggleTag={handleToggleTag}
             onBack={session ? goToSwipe : undefined}
             onHome={session ? goHome : undefined}
+            onDeleteDeck={session ? handleDeleteDeck : undefined}
           />
         )}
       </div>

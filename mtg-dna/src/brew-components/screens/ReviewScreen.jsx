@@ -82,6 +82,7 @@ export default function ReviewScreen({
   commander,
   cardTags, onToggleTag,
   onBack, onHome,
+  onDeleteDeck,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -95,6 +96,23 @@ export default function ReviewScreen({
   // null = name couldn't resolve (show "card data unavailable"), object = card.
   const [cardData, setCardData] = useState({});
   const [copied, setCopied] = useState(false);
+  // Delete is a two-step inline confirm — no modal, the row itself expands.
+  // `deleting` never resets on success: the parent tears the session down and
+  // this screen unmounts, so only failure returns control here.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDeleteDeck();
+    } catch (err) {
+      setDeleteError(err?.message ?? "delete failed — try again");
+      setDeleting(false);
+    }
+  }
 
   // Copy is the guaranteed part (works everywhere); the share sheet is a
   // best-effort bonus where supported — a cancelled/unsupported share never
@@ -507,6 +525,88 @@ export default function ReviewScreen({
         {/* DECKLIST always; MAYBEBOARD only when it holds cards. No pile. */}
         {renderSection("DECKLIST", groups.decklist, "decklist")}
         {maybeboard.length > 0 && renderSection("MAYBEBOARD", groups.maybe, "maybe")}
+
+        {/* Delete deck — the destructive act sits at the END of the list,
+            physically separated from export (top) and back/home (bottom nav)
+            per the NN/g destructive-action rule, and confirms inline: the row
+            expands in place, no modal. Deleting removes deck_cards + tags +
+            the deck row; the LEGEND stays in the Box at 0/100. */}
+        {live && onDeleteDeck && (
+          <div style={{ borderTop: "1px solid var(--bevel-dark)", paddingTop: 4 }}>
+            {!confirmingDelete ? (
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                style={{
+                  minHeight: 44,
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: "transparent", border: "none", padding: 0,
+                  color: "var(--muted)",
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 12, letterSpacing: "0.08em",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 16 }}>delete</span>
+                delete deck
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 0" }}>
+                <div style={{
+                  fontFamily: "'Noto Sans', sans-serif",
+                  fontSize: 13, lineHeight: 1.5,
+                  color: "var(--text2)",
+                }}>
+                  Delete this deck? All {totalCards} card{totalCards !== 1 ? "s" : ""} and
+                  their tags are removed. {commander?.name ?? "The legend"} stays in the
+                  box at 0/{DECK_GATE}.
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => { setConfirmingDelete(false); setDeleteError(null); }}
+                    disabled={deleting}
+                    style={{
+                      minHeight: 44, flex: 1,
+                      background: "transparent",
+                      border: "1px solid var(--muted)",
+                      borderRadius: 0,
+                      color: "var(--text)",
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontSize: 12, letterSpacing: "0.08em",
+                      cursor: "pointer",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    style={{
+                      minHeight: 44, flex: 1,
+                      background: "transparent",
+                      border: "1px solid var(--danger)",
+                      borderRadius: 0,
+                      color: "var(--danger)",
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontSize: 12, letterSpacing: "0.08em",
+                      cursor: deleting ? "default" : "pointer",
+                      opacity: deleting ? 0.6 : 1,
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    {deleting ? "deleting…" : "delete"}
+                  </button>
+                </div>
+                {deleteError && (
+                  <div style={{ fontSize: 12, color: "var(--danger)", lineHeight: 1.5 }}>
+                    {deleteError}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Name the brew — live sessions write on every flick, nothing to save */}
         {!live && (

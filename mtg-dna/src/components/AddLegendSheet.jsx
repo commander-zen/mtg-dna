@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "../theme/ThemeContext";
-import { searchCommanders } from "../lib/scryfall.js";
+import { searchCommanders, getCardImage } from "../lib/scryfall.js";
 import { prepareImport } from "../lib/moxfieldImport.js";
 
 export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
@@ -120,6 +120,14 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
     onSelect(card);
   }
 
+  // iOS pans the visual viewport when the keyboard opens for an input near
+  // the bottom of the screen, shoving the sheet's header up under the status
+  // bar. html/body are overflow:hidden so nothing should scroll — pin the
+  // window back to origin once the keyboard animation settles.
+  function pinViewportOnFocus() {
+    setTimeout(() => window.scrollTo(0, 0), 300);
+  }
+
   return createPortal(
     <>
       <div
@@ -205,6 +213,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
               type="search"
               value={query}
               onChange={e => setQuery(e.target.value)}
+              onFocus={pinViewportOnFocus}
               onKeyDown={e => { if (e.key === "Enter" && results[0]) handleSelect(results[0]); }}
               placeholder="search for a legend…"
               enterKeyHint="search"
@@ -245,38 +254,62 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
 
           {tab === "search" && (
           <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 20px" }}>
-            {results.map(card => (
-              <button
-                key={card.id}
-                onClick={() => handleSelect(card)}
-                style={{
-                  display: "block", width: "100%", textAlign: "left",
-                  background: "transparent", border: "none", borderRadius: 0,
-                  padding: "12px 0",
-                  borderBottom: `1px solid ${borderColor}`,
-                  cursor: "pointer",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                <div style={{
-                  fontFamily: "'Zilla Slab', serif",
-                  fontSize: 15,
-                  color: textColor,
-                }}>
-                  {card.name}
-                </div>
-                {card.type_line && (
+            {results.map(card => {
+              // Same-named printings (six different Hawkeyes) are otherwise
+              // indistinguishable rows — the art thumb plus the set name is
+              // what tells them apart before picking.
+              const thumb = getCardImage(card, "art_crop");
+              return (
+                <button
+                  key={card.id}
+                  onClick={() => handleSelect(card)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    width: "100%", textAlign: "left",
+                    background: "transparent", border: "none", borderRadius: 0,
+                    padding: "10px 0",
+                    borderBottom: `1px solid ${borderColor}`,
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
                   <div style={{
-                    fontFamily: "'Noto Sans Mono', monospace",
-                    fontSize: 11,
-                    color: dimColor,
-                    marginTop: 2,
+                    width: 48, height: 48, flexShrink: 0,
+                    overflow: "hidden",
+                    background: borderColor,
                   }}>
-                    {card.type_line.toLowerCase()}
+                    {thumb && (
+                      <img
+                        src={thumb}
+                        alt=""
+                        loading="lazy"
+                        draggable={false}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      />
+                    )}
                   </div>
-                )}
-              </button>
-            ))}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: "'Zilla Slab', serif",
+                      fontSize: 15,
+                      color: textColor,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {card.name}
+                    </div>
+                    <div style={{
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontSize: 11,
+                      color: dimColor,
+                      marginTop: 2,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {[card.set_name, card.type_line?.toLowerCase()].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
           )}
 
@@ -289,6 +322,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
             <textarea
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
+              onFocus={pinViewportOnFocus}
               placeholder={"paste a Moxfield bulk-edit decklist…\n1 Sol Ring #ramp\n1 Cyclonic Rift #mass-disruption"}
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               rows={6}

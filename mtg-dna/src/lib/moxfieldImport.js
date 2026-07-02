@@ -1,4 +1,4 @@
-import { fetchCardIdentity } from "./scryfall.js";
+import { getCardData, getCardDataBatch } from "./scryfall.js";
 import { WREC_TAGS } from "./deckTags.js";
 
 // Strip a trailing "(SET) NUM" printing marker (e.g. "Sol Ring (2XM) 232")
@@ -50,14 +50,20 @@ export function parseMoxfieldText(text) {
   return lines;
 }
 
-// Resolves every parsed line's card through the cache-first identity lookup
-// (local `cards` cache → live exact → live fuzzy; never throws). An
-// unresolved name carries `card: null` so the caller can flag/skip it rather
-// than failing the whole import.
+// Resolves every parsed line's card: the whole list against the local cache
+// in one batched query, then only true cache misses walk the throttled live
+// exact→fuzzy path one-by-one (was a serial round-trip per line — a 100-card
+// paste took seconds even fully cached). Never throws; an unresolved name
+// carries `card: null` so the caller can flag/skip it rather than failing
+// the whole import.
 export async function resolveImportLines(lines) {
+  const { data, misses } = await getCardDataBatch(lines.map(l => l.name));
+  const missSet = new Set(misses);
   const resolved = [];
   for (const line of lines) {
-    const card = await fetchCardIdentity(line.name);
+    const card = missSet.has(line.name)
+      ? await getCardData(line.name)
+      : (data[line.name] ?? null);
     resolved.push({ ...line, card });
   }
   return resolved;

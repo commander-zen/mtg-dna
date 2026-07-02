@@ -241,6 +241,49 @@ export function getCardData(name, options = {}) {
   return p;
 }
 
+// ── Batched per-card data resolver ────────────────────────────────────────────
+// The list surfaces (deck review, paste-import) need data for MANY names at
+// once. Resolving them through getCardData one-by-one costs a Supabase
+// round-trip per card — plus a CORS preflight each, throttled through the
+// browser's ~6-connections-per-host cap — which is the deck-view load lag.
+// This resolves a whole list against the cache in ONE chunked `in` query,
+// feeding the same memo getCardData uses. Names the cache doesn't know come
+// back in `misses`; the caller decides whether to chase them down the
+// throttled live path (getCardData per name) — kept out of this function so
+// a screen can paint the 95% cache-hit case without waiting on stragglers.
+const CACHE_BATCH_SIZE = 100;
+
+export async function getCardDataBatch(names) {
+  const data = {};
+  const wanted = new Map(); // lowered key → original spellings awaiting it
+  for (const name of names) {
+    const key = (name ?? "").trim().toLowerCase();
+    if (!key) { data[name] = null; continue; }
+    if (cardDataCache.has(key)) { data[name] = cardDataCache.get(key); continue; }
+    if (!wanted.has(key)) wanted.set(key, []);
+    wanted.get(key).push(name);
+  }
+
+  const keys = [...wanted.keys()];
+  for (let i = 0; i < keys.length; i += CACHE_BATCH_SIZE) {
+    try {
+      const { data: rows } = await supabase
+        .from("cards")
+        .select(CARD_CACHE_COLS + ", name_lower")
+        .in("name_lower", keys.slice(i, i + CACHE_BATCH_SIZE));
+      for (const row of rows ?? []) {
+        const card = cacheRowToCard(row);
+        cardDataCache.set(row.name_lower, card);
+        for (const orig of wanted.get(row.name_lower) ?? []) data[orig] = card;
+        wanted.delete(row.name_lower);
+      }
+    } catch { /* cache unreachable — the chunk's keys fall out as misses */ }
+  }
+
+  const misses = [...wanted.values()].flat();
+  return { data, misses };
+}
+
 // ── Single page fetch ─────────────────────────────────────────────────────────
 export async function fetchFirstPage(query, options = {}) {
   const { signal } = options;

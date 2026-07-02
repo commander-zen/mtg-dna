@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getCardData, formatManaCost } from "../../lib/scryfall.js";
+import { getCardData, getCardDataBatch, formatManaCost } from "../../lib/scryfall.js";
 
 // Spine screens pad for the notch (top, clearing the back chevron) and the
 // home indicator (bottom) now that no tab bar absorbs the bottom.
@@ -117,20 +117,33 @@ export default function ReviewScreen({
     maybe: groupByName(maybeboard),
   };
 
-  // Resolve every listed card's data through the one cache-ready helper. It
-  // memoizes and throttles internally, so requesting the whole list here costs
-  // each unique name a single (delayed) lookup — and slots behind the future
-  // local cache without touching this screen.
+  // Resolve every listed card's data in ONE batched cache query — per-name
+  // getCardData here cost a Supabase round-trip (plus CORS preflight) per
+  // card, which was the deck-view load lag. The batch paints all cache hits
+  // in a single state merge; only true cache misses (new/misspelled names)
+  // trickle in per-name afterward via the throttled live path.
   useEffect(() => {
-    const names = [...groups.decklist, ...groups.maybe].map(c => c.name);
+    const names = [...groups.decklist, ...groups.maybe]
+      .map(c => c.name)
+      .filter(name => cardData[name] === undefined);
+    if (names.length === 0) return;
     let cancelled = false;
-    for (const name of names) {
-      if (cardData[name] !== undefined) continue;
-      getCardData(name).then(card => {
-        if (cancelled) return;
-        setCardData(prev => (prev[name] !== undefined ? prev : { ...prev, [name]: card }));
+    getCardDataBatch(names).then(({ data, misses }) => {
+      if (cancelled) return;
+      setCardData(prev => {
+        const next = { ...prev };
+        for (const [name, card] of Object.entries(data)) {
+          if (next[name] === undefined) next[name] = card;
+        }
+        return next;
       });
-    }
+      for (const name of misses) {
+        getCardData(name).then(card => {
+          if (cancelled) return;
+          setCardData(prev => (prev[name] !== undefined ? prev : { ...prev, [name]: card }));
+        });
+      }
+    });
     return () => { cancelled = true; };
     // groups is derived from decklist/maybeboard; cardData is intentionally
     // omitted (the setter guards against clobbering already-resolved entries).

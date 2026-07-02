@@ -84,6 +84,9 @@ function mapCard(c) {
     card_faces: faces, // jsonb — supabase-js serializes the array/object
     image_normal: topImg?.normal ?? faceImg?.normal ?? null,
     art_crop: topImg?.art_crop ?? faceImg?.art_crop ?? null,
+    // migration 009 — Scryfall ships EDHREC rank on every card object, so the
+    // brew stack's default ordering costs zero extra requests.
+    edhrec_rank: c.edhrec_rank ?? null,
     updated_at: new Date().toISOString(),
   };
 }

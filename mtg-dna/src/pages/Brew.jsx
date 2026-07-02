@@ -9,7 +9,7 @@ import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
 import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard } from "../lib/deckTags.js";
-import { fetchLegendDeck, deleteLegendDeck } from "../lib/legendDeck.js";
+import { fetchLegendDeck, deleteLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
 // Brew sub-screens are always dark, regardless of the app theme mode —
@@ -709,20 +709,28 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     onSessionDone?.();
   }
 
-  // Deleting the deck — the one destructive act in the app. Confirmed in
-  // ReviewScreen, executed here. Pending flick-writes are dropped first so a
-  // queued +1 can't land after (and be rejected by) the delete; the persisted
-  // swipe session is cleared so the next brew starts a fresh seed instead of
-  // resuming a queue deduped against cards that no longer exist; then the
-  // session exits to the Box, where the legend reads 0/100, "no deck yet".
-  // Throws on failure so ReviewScreen's confirm UI can surface the error.
+  // Deleting the legend — the one destructive act in the app, and it deletes
+  // OUTRIGHT: legend, deck, cards, tags; nothing survives in the Box.
+  // Confirmed in ReviewScreen, executed here. Pending flick-writes are
+  // dropped first so a queued +1 can't land after (and be rejected by) the
+  // delete; the persisted swipe session and the legend's slot in the saved
+  // box order / last-active keys are cleared; then the session exits to the
+  // Box. Throws on failure so ReviewScreen's confirm UI can surface it.
   async function handleDeleteDeck() {
-    if (!attachDeckId) return;
+    const legendId = session?.legend?.id;
+    if (!legendId) return;
     writeQueueRef.current = [];
-    await deleteLegendDeck(attachDeckId);
-    if (session?.legend?.id) {
-      try { localStorage.removeItem(brewSessionKey(session.legend.id)); } catch { /* best-effort */ }
-    }
+    await deleteLegend(legendId, attachDeckId);
+    try {
+      localStorage.removeItem(brewSessionKey(legendId));
+      const order = JSON.parse(localStorage.getItem("magicdex-box-order") ?? "null");
+      if (Array.isArray(order)) {
+        localStorage.setItem("magicdex-box-order", JSON.stringify(order.filter(id => id !== legendId)));
+      }
+      if (localStorage.getItem("magicdex-last-legend") === String(legendId)) {
+        localStorage.removeItem("magicdex-last-legend");
+      }
+    } catch { /* best-effort local cleanup */ }
     resetBrew();
     onSessionDone?.();
   }

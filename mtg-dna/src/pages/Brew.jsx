@@ -889,7 +889,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onExit={goBack}
             onGoToSearch={() => setBrewView("search")}
             onSearchMore={() => setBrewView("search")}
-            commanderCard={sessionLabel ? { name: sessionLabel } : null}
+            commanderCard={session
+              ? { name: session.legend.name, art: session.legend.image_uri }
+              : sessionLabel ? { name: sessionLabel } : null}
             initialIndex={swipeIndex}
             onIndexChange={setSwipeIndex}
             swipeOrder={swipeOrder}

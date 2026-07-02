@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { getCardImage } from "../../lib/scryfall.js";
+import { getCardImage, getCardData } from "../../lib/scryfall.js";
 import { getSettings } from "../../lib/settings.js";
 import { useDoubleTap } from "../../hooks/useDoubleTap.js";
 import { useGameChangers } from "../../hooks/useGameChangers.js";
@@ -338,6 +338,20 @@ export default function SwipeScreen({
   const isGameChanger = card?.game_changer === true ||
     Boolean(card?.oracle_id && gameChangerIds.has(card.oracle_id));
   const commanderName    = commanderCard?.name ?? null;
+  const commanderArt     = commanderCard?.art ?? null;
+
+  // Tap the commander bar to re-read the card: full card image fetched
+  // cache-first on first open (null = loading, undefined = lookup failed).
+  const [showCommander, setShowCommander] = useState(false);
+  const [commanderFull, setCommanderFull] = useState(null);
+  async function openCommander() {
+    if (!commanderName) return;
+    setShowCommander(true);
+    if (commanderFull == null) {
+      const full = await getCardData(commanderName);
+      setCommanderFull(full ?? undefined);
+    }
+  }
 
   // Double-tap flips double-faced cards (single tap still toggles expand)
   const handleDoubleTap = useDoubleTap(() => {
@@ -513,131 +527,125 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Persistent header — legend anchor + running tally. Back/search
-            moved to the bottom thumb-zone; the legend anchor stays (load-
-            bearing per DESIGN_DOCTRINE). ── */}
+      {/* ── Commander bar — ONE header row (Ben's device-pass consolidation):
+            tappable commander anchor (art + name + count; tap = re-read the
+            full card) on the left, UNDO / SORT / DONE on the right. DONE
+            exits to the deck list (review). ── */}
       <div style={{
         position: "absolute",
         top: "env(safe-area-inset-top)",
         left: 0, right: 0,
         zIndex: 3,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex", alignItems: "center", gap: 4,
         padding: "6px 8px",
         background: "transparent",
       }}>
-        <div style={{
-          fontFamily: "'Zilla Slab', serif",
-          fontSize: 14,
-          color: "rgba(255,255,255,0.8)",
-          letterSpacing: "0.02em",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          padding: "0 8px",
-          flex: 1,
-        }}>
-          {commanderName ?? ""}
-        </div>
+        <button
+          onClick={openCommander}
+          aria-label="Show commander card"
+          style={{
+            flex: 1, minWidth: 0, minHeight: 44,
+            display: "flex", alignItems: "center", gap: 8,
+            background: "transparent", border: "none",
+            padding: "0 4px", textAlign: "left",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          {commanderArt && (
+            <img
+              src={commanderArt}
+              alt=""
+              style={{
+                width: 34, height: 34, objectFit: "cover",
+                // corner mask matches the swipe card / review anchor
+                borderRadius: "5.5% / 4%", flexShrink: 0,
+              }}
+            />
+          )}
+          <span style={{ minWidth: 0 }}>
+            <span style={{
+              display: "block",
+              fontFamily: "'Zilla Slab', serif",
+              fontSize: 14,
+              color: "rgba(255,255,255,0.85)",
+              letterSpacing: "0.02em",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {commanderName ?? ""}
+            </span>
+            <span style={{
+              display: "block",
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 10, letterSpacing: "0.1em",
+              color: "rgba(255,255,255,0.3)",
+              textTransform: "uppercase",
+            }}>
+              {reconnecting
+                ? "reconnecting…"
+                : done
+                  ? `${pile.length} kept`
+                  : `${effectiveCards.length - idx} in stack`}
+            </span>
+          </span>
+        </button>
 
+        {history.length > 0 && !animOut && (
+          <button
+            onClick={doUndo}
+            style={{
+              minHeight: 44, minWidth: 44, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "transparent", border: "none",
+              color: "rgba(255,255,255,0.4)",
+              fontFamily: "'Noto Sans', sans-serif",
+              fontSize: 11, letterSpacing: 2, cursor: "pointer",
+              padding: "2px 6px",
+            }}
+          >UNDO</button>
+        )}
+        <button
+          onClick={e => { e.stopPropagation(); setSortMenuOpen(o => !o); }}
+          style={{
+            minHeight: 44, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "3px 10px", borderRadius: 4,
+            border: "1px solid rgba(255,255,255,0.15)",
+            background: "rgba(0,0,0,0.5)",
+            color: "rgba(255,255,255,0.4)",
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 10, letterSpacing: 1, cursor: "pointer", lineHeight: 1,
+          }}
+        >
+          {SORT_OPTIONS.find(o => o.value === swipeOrder)?.label ?? "SORT"}
+          {/* EDHREC is a fixed rank — the asc/desc arrow only applies to
+              NAME/CMC, where the user actually toggles direction. */}
+          {swipeOrder !== "edhrec" && ` ${swipeDir === "asc" ? "↑" : "↓"}`}
+        </button>
         <button
           onClick={onGoToPile}
-          aria-label="Open review"
+          aria-label="Done — open deck list"
           style={{
+            minHeight: 44, flexShrink: 0,
             display: "flex", alignItems: "center", gap: 4,
-            minHeight: 44,
             fontFamily: "'Noto Sans Mono', monospace",
             fontSize: 12,
-            color: "var(--muted)",
+            color: "var(--primary)",
             background: "transparent", border: "none",
             padding: "0 8px",
-            flexShrink: 0,
             cursor: "pointer",
             WebkitTapHighlightColor: "transparent",
           }}
         >
-          <span
-            className="material-symbols-rounded"
-            style={{ fontSize: 15 }}
-          >
-            checklist
-          </span>
-          <span style={{ letterSpacing: "0.06em" }}>review</span>
-          <span style={{ textDecoration: "underline", textDecorationColor: "rgba(255,255,255,0.2)" }}>
-            ({decklist.length}·{maybeboard.length})
-          </span>
-          <span
-            className="material-symbols-rounded"
-            style={{ fontSize: 14, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
-          >
-            chevron_right
-          </span>
+          <span style={{ letterSpacing: "0.06em" }}>done</span>
+          <span style={{ color: "var(--muted)" }}>({decklist.length}·{maybeboard.length})</span>
         </button>
-      </div>
-
-      {/* ── Stack info strip (top) ── */}
-      <div style={{
-        position: "absolute",
-        top: "calc(env(safe-area-inset-top) + 40px)",
-        left: 0, right: 0,
-        zIndex: 2,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 20px",
-        pointerEvents: "none",
-      }}>
-        <div style={{
-          fontSize: 11, color: "rgba(255,255,255,0.3)",
-          letterSpacing: "0.1em", textTransform: "uppercase",
-        }}>
-          {done
-            ? `${pile.length} KEPT`
-            : `${effectiveCards.length - idx} IN STACK${commanderName ? ` · ${commanderName.toUpperCase()}` : ""}`}
-          {reconnecting && (
-            <div style={{ marginTop: 2, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em" }}>
-              reconnecting…
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, pointerEvents: "auto" }}>
-          {history.length > 0 && !animOut && (
-            <button
-              onClick={doUndo}
-              style={{
-                minHeight: 44, minWidth: 44,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: "transparent", border: "none",
-                color: "rgba(255,255,255,0.4)",
-                fontFamily: "'Noto Sans', sans-serif",
-                fontSize: 11, letterSpacing: 2, cursor: "pointer",
-                padding: "2px 6px",
-              }}
-            >UNDO</button>
-          )}
-          <button
-            onClick={e => { e.stopPropagation(); setSortMenuOpen(o => !o); }}
-            style={{
-              minHeight: 44,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "3px 10px", borderRadius: 4,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: "rgba(0,0,0,0.5)",
-              color: "rgba(255,255,255,0.4)",
-              fontFamily: "'Noto Sans', sans-serif",
-              fontSize: 10, letterSpacing: 1, cursor: "pointer", lineHeight: 1,
-            }}
-          >
-            {SORT_OPTIONS.find(o => o.value === swipeOrder)?.label ?? "SORT"}
-            {/* EDHREC is a fixed rank — the asc/desc arrow only applies to
-                NAME/CMC, where the user actually toggles direction. */}
-            {swipeOrder !== "edhrec" && ` ${swipeDir === "asc" ? "↑" : "↓"}`}
-          </button>
-        </div>
       </div>
 
       {/* Sort dropdown */}
       {sortMenuOpen && (
         <div style={{
           position: "absolute",
-          top: `calc(env(safe-area-inset-top) + 82px)`,
+          top: `calc(env(safe-area-inset-top) + 56px)`,
           right: 20, zIndex: 10,
           background: "#111",
           border: "1px solid rgba(255,255,255,0.1)",
@@ -712,9 +720,9 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Bottom controls — lock-screen grammar: BACK bottom-left, SEARCH
-            bottom-right, gesture hint between. Tapping search navigates to the
-            full SearchScreen. Back is always reachable, even in the done state. ── */}
+      {/* ── Bottom controls — Ben's device-pass placement: SEARCH bottom-left,
+            HOME bottom-right, gesture hint between. Home exits the session
+            (always reachable, even in the done state). ── */}
       <div style={{
         position: "absolute",
         left: 0, right: 0,
@@ -723,39 +731,8 @@ export default function SwipeScreen({
         display: "flex", alignItems: "center", gap: 8,
         padding: "0 8px",
       }}>
-        {/* BACK — bottom-left, ≥44px, climbs the ladder (swipe → legend) */}
-        <button
-          onClick={onExit}
-          aria-label="Back"
-          style={{
-            width: 44, height: 44, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
-            color: "rgba(255,255,255,0.75)",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span className="material-symbols-rounded" style={{ fontSize: 22 }}>arrow_back</span>
-        </button>
-
-        {/* Middle — gesture hint */}
-        {!done && (
-          <div style={{
-            flex: 1, minWidth: 0,
-            textAlign: "center",
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 11,
-            color: "var(--muted)",
-            whiteSpace: "nowrap",
-            overflow: "hidden", textOverflow: "ellipsis",
-            pointerEvents: "none",
-          }}>
-            {"← browse →  ↑ mainboard  ↓ maybe"}
-          </div>
-        )}
-
-        {/* SEARCH — bottom-right, ≥44px. Navigates to the full SearchScreen. */}
-        {!done && (
+        {/* SEARCH — bottom-left, ≥44px. Navigates to the full SearchScreen. */}
+        {!done ? (
           <button
             onClick={onGoToSearch}
             aria-label="Search"
@@ -769,8 +746,78 @@ export default function SwipeScreen({
           >
             <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
           </button>
+        ) : (
+          <div style={{ width: 44, flexShrink: 0 }} />
         )}
+
+        {/* Middle — gesture hint */}
+        <div style={{
+          flex: 1, minWidth: 0,
+          textAlign: "center",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 11,
+          color: "var(--muted)",
+          whiteSpace: "nowrap",
+          overflow: "hidden", textOverflow: "ellipsis",
+          pointerEvents: "none",
+        }}>
+          {!done && "← browse →  ↑ mainboard  ↓ maybe"}
+        </div>
+
+        {/* HOME — bottom-right, ≥44px, exits the session to the Box */}
+        <button
+          onClick={onExit}
+          aria-label="Home"
+          style={{
+            width: 44, height: 44, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
+            color: "rgba(255,255,255,0.75)",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>home</span>
+        </button>
       </div>
+
+      {/* ── Commander card overlay — tap the commander bar to open, tap
+            anywhere to dismiss. Unaltered full card image (Scryfall terms). ── */}
+      {showCommander && (
+        <div
+          onClick={() => setShowCommander(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={commanderName ? `${commanderName} card` : "Commander card"}
+          style={{
+            position: "absolute", inset: 0, zIndex: 30,
+            background: "rgba(0,0,0,0.82)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          {commanderFull ? (
+            <img
+              src={getCardImage(commanderFull, "normal")}
+              alt={commanderName ?? "Commander card"}
+              style={{
+                width: "min(88vw, 400px)",
+                maxHeight: "82vh",
+                objectFit: "contain",
+                borderRadius: "5.5% / 4%",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+              }}
+            />
+          ) : (
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 12, letterSpacing: "0.1em",
+              color: "rgba(255,255,255,0.5)",
+            }}>
+              {commanderFull === undefined ? "card unavailable" : "loading…"}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

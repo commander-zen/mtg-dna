@@ -344,9 +344,18 @@ export default function ReviewScreen({
                   </div>
                 )}
 
-                {/* WREC chip selector — five 44px multi-select chips */}
+                {/* Action grid — the five WREC tag chips plus the move-board
+                    action as a SIXTH uniform cell (3×2, equal widths, nothing
+                    hanging). Same chip form throughout; the swap glyph marks
+                    move as an action rather than a tag. User-facing copy says
+                    "mainboard" even though the section value is decklist. */}
                 {live && expanded && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "4px 0 10px" }}>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 6,
+                    padding: "4px 0 10px",
+                  }}>
                     {WREC_CHIPS.map(({ tag, label }) => {
                       const active = tags.includes(tag);
                       return (
@@ -355,8 +364,8 @@ export default function ReviewScreen({
                           onClick={(e) => { e.stopPropagation(); onToggleTag?.(name, sectionKey, tag); }}
                           style={{
                             minHeight: 44,
-                            padding: "0 12px",
-                            display: "flex", alignItems: "center",
+                            padding: "0 6px",
+                            display: "flex", alignItems: "center", justifyContent: "center",
                             border: `1px solid ${active ? "var(--primary)" : "var(--muted)"}`,
                             background: active ? "var(--primary)" : "transparent",
                             color: active ? "var(--color-bg)" : "var(--muted)",
@@ -364,7 +373,7 @@ export default function ReviewScreen({
                             fontSize: 10,
                             letterSpacing: "0.08em",
                             // Scoped exception to the app's no-radius rule — only
-                            // these five WREC tag chips get a soft pill corner.
+                            // these action chips get a soft pill corner.
                             borderRadius: 6,
                             cursor: "pointer",
                             WebkitTapHighlightColor: "transparent",
@@ -372,30 +381,29 @@ export default function ReviewScreen({
                         >{label}</button>
                       );
                     })}
+                    {onMoveCard && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
+                        style={{
+                          minHeight: 44,
+                          padding: "0 6px",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                          border: "1px solid var(--muted)",
+                          background: "transparent",
+                          color: "var(--muted)",
+                          fontFamily: "'Noto Sans Mono', monospace",
+                          fontSize: 10,
+                          letterSpacing: "0.08em",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        <span className="material-symbols-rounded" style={{ fontSize: 14 }}>swap_vert</span>
+                        {sectionKey === "decklist" ? "MAYBE" : "MAIN"}
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {/* Move to the other board — direct, no remove + re-swipe
-                    round trip. A per-card secondary action, so it lives in
-                    the expanded panel below tagging; user-facing copy says
-                    "mainboard" even though the section value is decklist. */}
-                {live && expanded && onMoveCard && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
-                    style={{
-                      minHeight: 44,
-                      display: "flex", alignItems: "center", gap: 6,
-                      background: "transparent", border: "none", padding: 0,
-                      color: "var(--muted)",
-                      fontFamily: "'Noto Sans Mono', monospace",
-                      fontSize: 11, letterSpacing: "0.08em",
-                      cursor: "pointer",
-                      WebkitTapHighlightColor: "transparent",
-                    }}
-                  >
-                    <span className="material-symbols-rounded" style={{ fontSize: 16 }}>swap_vert</span>
-                    move to {sectionKey === "decklist" ? "maybeboard" : "mainboard"}
-                  </button>
                 )}
               </div>
             );
@@ -588,11 +596,11 @@ export default function ReviewScreen({
         {renderSection("DECKLIST", groups.decklist, "decklist")}
         {maybeboard.length > 0 && renderSection("MAYBEBOARD", groups.maybe, "maybe")}
 
-        {/* Delete deck — the destructive act sits at the END of the list,
+        {/* Delete — the destructive act sits at the END of the list,
             physically separated from export (top) and back/home (bottom nav)
             per the NN/g destructive-action rule, and confirms inline: the row
-            expands in place, no modal. Deleting removes deck_cards + tags +
-            the deck row; the LEGEND stays in the Box at 0/100. */}
+            expands in place, no modal. Deletes OUTRIGHT: the legend, its
+            deck, cards, and tags all leave the Box — nothing survives. */}
         {live && onDeleteDeck && (
           <div style={{ borderTop: "1px solid var(--bevel-dark)", paddingTop: 4 }}>
             {!confirmingDelete ? (
@@ -610,7 +618,7 @@ export default function ReviewScreen({
                 }}
               >
                 <span className="material-symbols-rounded" style={{ fontSize: 16 }}>delete</span>
-                delete deck
+                delete legend
               </button>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 0" }}>
@@ -619,9 +627,9 @@ export default function ReviewScreen({
                   fontSize: 13, lineHeight: 1.5,
                   color: "var(--text2)",
                 }}>
-                  Delete this deck? All {totalCards} card{totalCards !== 1 ? "s" : ""} and
-                  their tags are removed. {commander?.name ?? "The legend"} stays in the
-                  box at 0/{DECK_GATE}.
+                  Delete {commander?.name ?? "this legend"}? The legend, its deck
+                  ({totalCards} card{totalCards !== 1 ? "s" : ""}), and all tags leave
+                  the box. This can't be undone.
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button

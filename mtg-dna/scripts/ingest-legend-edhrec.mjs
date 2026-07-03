@@ -1,11 +1,23 @@
 #!/usr/bin/env node
-// ingest-legend-edhrec.mjs — cache each Box legend's EDHREC commander page
-// (synergy card lists + theme tags) into legend_synergy / legend_themes.
+// ingest-legend-edhrec.mjs — cache EDHREC commander pages (synergy card
+// lists + theme tags) into legend_synergy / legend_themes.
 //
-// MANUAL, dev-machine only (same posture as the other ingests):
+// MANUAL, dev-machine only (same posture as the other ingests). Post-013
+// the SERVICE_ROLE key is required — RLS blocks the publishable key from
+// writing the shared cache tables:
 //
-//   SUPABASE_SERVICE_KEY=... npm run ingest:legend-edhrec
+//   SUPABASE_SERVICE_KEY=<service_role> npm run ingest:legend-edhrec            (Box legends)
+//   SUPABASE_SERVICE_KEY=<service_role> npm run ingest:legend-edhrec -- --all   (EVERY commander)
 //   npm run ingest:legend-edhrec -- --dry-run --name="Hawkeye, Young Avenger"
+//
+// --all walks every commander-legal candidate in the cards cache (legendary
+// creatures + "can be your commander" cards), most-played first (EDHREC rank
+// order) so an interrupted run still covers what people actually brew.
+// ~2,900 pages at politeFetch's 400ms spacing ≈ 25–40 min; commanders with
+// no EDHREC page 404 and are skipped. Together with brew_stack v4 (015),
+// this makes the brew stack relevant for every commander in the game —
+// Ben's 2026-07-03 verdict: the generic fallback stack loses a Commander
+// player instantly.
 //
 // Source is json.edhrec.com/pages/commanders/<slug>.json — the commander
 // page's own data feed (UNOFFICIAL, per DATA_SOURCES.md: cached here on a
@@ -17,10 +29,11 @@
 //
 // Requires migration 011 (legend_synergy + legend_themes).
 
-import { makeSupabase, politeFetch, sleep } from "./ingest-shared.mjs";
+import { makeSupabase, politeFetch } from "./ingest-shared.mjs";
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
+const ALL = args.includes("--all");
 const ONLY_NAME = args.find(a => a.startsWith("--name="))?.slice(7) ?? null;
 
 const EDHREC_DELAY_MS = 400; // gentler spacing for the unofficial endpoint
@@ -28,10 +41,14 @@ const EDHREC_DELAY_MS = 400; // gentler spacing for the unofficial endpoint
 const supabase = DRY_RUN && ONLY_NAME ? null : makeSupabase();
 
 // EDHREC commander slugs: lowercase, punctuation stripped, spaces → hyphens
-// ("Hawkeye, Young Avenger" → hawkeye-young-avenger). Verified against live
-// pages for all three Box legends; a miss logs and skips, never throws.
+// ("Hawkeye, Young Avenger" → hawkeye-young-avenger). DFC/adventure names
+// slug from the FRONT FACE only — EDHREC pages live at the front face's
+// slug, and "A // B" would otherwise mint a bogus "a-b" slug. A miss logs
+// and skips, never throws.
 function edhrecSlug(name) {
   return name
+    .split("//")[0]
+    .trim()
     .toLowerCase()
     .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip accents
     .replace(/[^a-z0-9\s-]/g, "")
@@ -50,6 +67,30 @@ async function lookupOracleId(name) {
   return data?.oracle_id ?? null;
 }
 
+// --all: every commander-legal candidate in the cards cache — legendary
+// creatures plus anything whose text grants commander eligibility. Paged
+// reads (PostgREST caps at 1,000 rows); EDHREC-rank order = most played
+// first.
+async function fetchAllCommanders() {
+  const out = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select("name, oracle_id")
+      .eq("legal_commander", true)
+      // `*` wildcards — inside an or() filter string PostgREST expects *
+      // (verified live: this exact filter returns 3,321 candidates)
+      .or("and(type_line.ilike.*legendary*,type_line.ilike.*creature*),oracle_text.ilike.*can be your commander*")
+      .order("edhrec_rank", { ascending: true, nullsFirst: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`commander enumeration failed: ${error.message}`);
+    out.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 async function fetchCommanderPage(slug) {
   const res = await politeFetch(
     `https://json.edhrec.com/pages/commanders/${slug}.json`,
@@ -64,6 +105,9 @@ async function main() {
   let legends;
   if (ONLY_NAME && DRY_RUN) {
     legends = [{ name: ONLY_NAME }];
+  } else if (ALL) {
+    legends = await fetchAllCommanders();
+    console.log(`--all: ${legends.length} commander candidates (most played first)`);
   } else {
     let q = supabase.from("legends").select("name");
     if (ONLY_NAME) q = q.eq("name", ONLY_NAME);
@@ -72,15 +116,16 @@ async function main() {
     legends = data ?? [];
   }
   if (legends.length === 0) {
-    console.log("No legends in the Box — nothing to fetch.");
+    console.log("Nothing to fetch.");
     return;
   }
 
   const runIso = new Date().toISOString();
+  let done = 0, missed = 0, synergyTotal = 0;
 
   for (const legend of legends) {
     const slug = edhrecSlug(legend.name);
-    const oracleId = await lookupOracleId(legend.name);
+    const oracleId = legend.oracle_id ?? await lookupOracleId(legend.name);
     if (!oracleId) {
       console.log(`${legend.name}: not in the cards cache — skipped.`);
       continue;
@@ -88,7 +133,8 @@ async function main() {
 
     const page = await fetchCommanderPage(slug);
     if (!page) {
-      console.log(`${legend.name}: no EDHREC page at "${slug}" — skipped (new/obscure commander?).`);
+      missed++;
+      if (!ALL) console.log(`${legend.name}: no EDHREC page at "${slug}" — skipped (new/obscure commander?).`);
       continue;
     }
 
@@ -123,10 +169,12 @@ async function main() {
       updated_at: runIso,
     }));
 
-    const topThemes = themes.slice(0, 3).map(t => `${t.theme_name} ${t.deck_count}`).join(", ");
-    console.log(`${legend.name} [${slug}] → ${rows.size} synergy cards, ${themes.length} themes (top: ${topThemes})`);
+    if (!ALL) {
+      const topThemes = themes.slice(0, 3).map(t => `${t.theme_name} ${t.deck_count}`).join(", ");
+      console.log(`${legend.name} [${slug}] → ${rows.size} synergy cards, ${themes.length} themes (top: ${topThemes})`);
+    }
 
-    if (DRY_RUN) continue;
+    if (DRY_RUN) { done++; synergyTotal += rows.size; continue; }
 
     const synergyRows = [...rows.values()];
     for (let i = 0; i < synergyRows.length; i += 500) {
@@ -151,14 +199,19 @@ async function main() {
       if (error) throw new Error(`${table} prune failed: ${error.message}`);
     }
 
-    await sleep(200);
+    done++;
+    synergyTotal += rows.size;
+    if (ALL && done % 100 === 0) {
+      console.log(`  …${done} commanders cached (${missed} without a page so far, ${synergyTotal} synergy rows)`);
+    }
   }
 
+  console.log("──────────────────────────────────────────────");
+  console.log(`cached ${done} commanders; ${missed} had no EDHREC page`);
   if (!DRY_RUN) {
     const { count } = await supabase
       .from("legend_synergy")
       .select("*", { count: "exact", head: true });
-    console.log("──────────────────────────────────────────────");
     console.log(`legend_synergy table now holds: ${count ?? "?"} rows`);
   }
 }

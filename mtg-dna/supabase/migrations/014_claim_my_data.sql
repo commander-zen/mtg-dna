@@ -1,10 +1,16 @@
--- 014_claim_my_data.sql — one-time: attach Ben's pre-multi-user data to his
--- account. Run AFTER 013 and AFTER opening the app once on your main device
--- (the phone), which signs you in anonymously.
+-- 014_claim_my_data.sql — REPURPOSED (Ben 2026-07-03: "i dont care about
+-- backing up my information... my decks are in moxfield. anything in here
+-- is test data"): instead of claiming the pre-multi-user rows, PURGE them.
+-- Run once after 013. Deletes only ownerless (user_id NULL) rows — anything
+-- created by a signed-in account is untouched.
 --
--- Get your user id from the app: Settings → the "account" row (tap to copy),
--- then replace the placeholder below and run. Until you do, your existing
--- legends/decks are invisible in the app (user_id NULL) but fully intact.
+-- Child → parent order: deck_card_tags cascades off deck_cards (006);
+-- deck_cards → decks has no cascade, so cards go first.
 
-update legends set user_id = '<YOUR-USER-ID>' where user_id is null;
-update decks   set user_id = '<YOUR-USER-ID>' where user_id is null;
+delete from deck_cards dc
+using decks d
+where d.id = dc.deck_id and d.user_id is null;
+
+delete from decks where user_id is null;
+
+delete from legends where user_id is null;

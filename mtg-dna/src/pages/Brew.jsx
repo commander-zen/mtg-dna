@@ -8,7 +8,7 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, fetchBrewStack, fetchTagStack, getCardDataBatch } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
-import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
+import { tagCard, untagCard, confirmAutoTag, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -663,17 +663,24 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       if (!deckCardId) return;
     }
     const had = (entry?.tags ?? []).includes(tag);
+    // Tap ladder (Ben): outlined auto chip → tap CONFIRMS it (fills in as a
+    // user tag, source flips to 'user') → tap again removes. A plain user
+    // tag removes on first tap; an absent tag is added as the user's.
+    const confirming = had && (entry?.autoTags ?? []).includes(tag);
     const prevEntry = entry ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
     setCardTags(prev => {
       const cur = prev[key] ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
-      const tags = had ? cur.tags.filter(t => t !== tag) : [...cur.tags, tag];
-      // Removing an auto tag removes its auto marker with it; a re-add later
-      // is a user tag (tagCard inserts with the default 'user' source).
-      const autoTags = had ? (cur.autoTags ?? []).filter(t => t !== tag) : (cur.autoTags ?? []);
+      const tags = confirming ? cur.tags
+        : had ? cur.tags.filter(t => t !== tag)
+        : [...cur.tags, tag];
+      const autoTags = (confirming || had)
+        ? (cur.autoTags ?? []).filter(t => t !== tag)
+        : (cur.autoTags ?? []);
       return { ...prev, [key]: { ...cur, id: deckCardId, tags, autoTags } };
     });
     try {
-      if (had) await untagCard(deckCardId, tag);
+      if (confirming) await confirmAutoTag(deckCardId, tag);
+      else if (had) await untagCard(deckCardId, tag);
       else await tagCard(deckCardId, tag);
     } catch {
       setCardTags(prev => ({ ...prev, [key]: prevEntry }));

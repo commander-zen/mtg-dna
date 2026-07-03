@@ -584,17 +584,20 @@ export default function ReviewScreen({
             {wrecCounts.map(({ tag, label, n }) => {
               const active = wrecFilter === tag;
               const dim = n === 0;
+              // Zeros stay dimmed but are STILL tappable (Ben): a zero IS the
+              // gap — tapping it lands on the empty filter + "add more", the
+              // whole point of the gap-fill flow.
               return (
                 <button
                   key={tag}
-                  onClick={dim ? undefined : () => { setWrecFilter(f => (f === tag ? null : tag)); setAddMoreError(null); }}
+                  onClick={() => { setWrecFilter(f => (f === tag ? null : tag)); setAddMoreError(null); }}
                   style={{
                     minHeight: 44,
                     display: "flex", flexDirection: "column",
                     alignItems: "center", justifyContent: "center", gap: 1,
                     background: "transparent", border: "none", padding: 0,
                     borderBottom: `2px solid ${active ? "var(--primary)" : "transparent"}`,
-                    cursor: dim ? "default" : "pointer",
+                    cursor: "pointer",
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >

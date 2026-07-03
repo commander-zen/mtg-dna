@@ -68,12 +68,14 @@ export default function SettingsSheet({ open, onClose }) {
     setEmailMsg(null);
     const { error } = await supabase.auth.updateUser({ email: addr });
     setEmailBusy(false);
-    // email_address_invalid renders an empty string for the address (seen
-    // live against test domains) — say something human instead.
+    // Human copy for the raw errors seen live: email_address_invalid renders
+    // an empty address; the mailer rate limit reads like a user fault.
     setEmailMsg(error
       ? (error.code === "email_address_invalid"
           ? "that email doesn't look deliverable — try another"
-          : error.message)
+          : error.code === "over_email_send_rate_limit"
+            ? "email is busy right now — nothing is lost, try again in an hour"
+            : error.message)
       : "confirmation sent — open the link and your box is backed up");
   }
 

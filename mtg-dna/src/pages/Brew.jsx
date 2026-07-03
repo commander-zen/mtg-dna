@@ -279,11 +279,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     const { error: linkError } = await supabase.auth.updateUser({ email: addr });
     setNudgeBusy(false);
     if (linkError) {
-      // Supabase's email_address_invalid message renders an empty string
-      // for the address (seen live) — say something human instead.
+      // Human copy for the two raw errors seen live: email_address_invalid
+      // renders an empty address, and the mailer's rate limit reads like a
+      // user fault when it's a server budget.
       setNudgeError(linkError.code === "email_address_invalid"
         ? "that email doesn't look deliverable — try another"
-        : linkError.message);
+        : linkError.code === "over_email_send_rate_limit"
+          ? "email is busy right now — your brew is still here, try again in an hour (or from settings)"
+          : linkError.message);
       return;
     }
     setNudgeSent(true);

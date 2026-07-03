@@ -96,7 +96,12 @@ async function fetchCommanderPage(slug) {
     `https://json.edhrec.com/pages/commanders/${slug}.json`,
     { delayMs: EDHREC_DELAY_MS },
   );
-  if (res.status === 404) return null;
+  // Any 4xx = "this slug has no commander page" — skip, never abort. Seen
+  // live: 404 for unplayed commanders, 403 for non-commander false positives
+  // (battles whose back face is a legendary creature, e.g.
+  // invasion-of-ikoria killed the first --all run). 5xx/exhausted-429 still
+  // throw: those are EDHREC-side problems worth stopping for.
+  if (res.status >= 400 && res.status < 500) return null;
   if (!res.ok) throw new Error(`EDHREC ${slug}: HTTP ${res.status}`);
   return res.json();
 }

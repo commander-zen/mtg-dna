@@ -43,7 +43,11 @@ export async function upsertLegend(fields) {
     .upsert(fields, { onConflict: "user_id,name" })
     .select()
     .single();
-  if (error) {
+  // Fall back ONLY when the failure is the conflict target itself not
+  // existing yet (42703 unknown column / 42P10 no matching constraint —
+  // i.e. code deployed ahead of migration 013). Any other error (RLS
+  // denial, network) must surface as itself, not as the fallback's noise.
+  if (error && (error.code === "42P10" || error.code === "42703")) {
     ({ data, error } = await supabase
       .from("legends")
       .upsert(fields, { onConflict: "name" })

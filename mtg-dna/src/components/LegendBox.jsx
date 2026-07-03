@@ -227,7 +227,13 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     }
     try {
       await upsertLegend({ name: card.name, scryfall_id: card.id });
-    } catch { /* add silently no-ops on failure, matching the old unchecked upsert */ }
+    } catch (err) {
+      // Never fail mute — with RLS live, a missing session rejects the write
+      // and a silent no-op here reads as "the app is broken".
+      setAddOpen(false);
+      showToast(err?.message ?? "couldn't add — sign-in failed?");
+      return;
+    }
     setAddOpen(false);
     setLoading(true);
     await loadLegends();

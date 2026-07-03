@@ -16,16 +16,37 @@ const SORT_CHOICES = [
 export default function SettingsSheet({ open, onClose }) {
   const { theme, mode, toggleTheme } = useTheme();
   const [defaults, setDefaults] = useState(getBrewDefaults);
-  // The anonymous account's id — shown so the user (mostly Ben, for the
-  // 014 data-claim backfill) can copy it. No other identity exists.
+  // The account behind the invisible sign-in. userId/userEmail come from the
+  // live session; authError surfaces WHY there's no session (e.g. the
+  // anonymous provider being disabled) instead of a mute "not signed in".
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
+  const [authError, setAuthError] = useState(null);
   const [idCopied, setIdCopied] = useState(false);
+  // Backup email flow — the durability answer: decks live on the account, so
+  // linking an email makes the account (and every deck on it) recoverable on
+  // any device via magic link. Without it, the account only lives in this
+  // browser's storage.
+  const [email, setEmail] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMsg, setEmailMsg] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user?.id ?? null);
-    });
+    (async () => {
+      let { data } = await supabase.auth.getSession();
+      let session = data.session;
+      if (!session) {
+        // Retry the invisible sign-in here so opening settings self-heals a
+        // failed boot attempt — and captures the real error if it can't.
+        const res = await supabase.auth.signInAnonymously();
+        if (res.error) setAuthError(res.error.message);
+        session = res.data?.session ?? null;
+      }
+      setUserId(session?.user?.id ?? null);
+      setUserEmail(session?.user?.email || null);
+      if (session) setAuthError(null);
+    })();
   }, [open]);
 
   async function copyUserId() {
@@ -35,6 +56,39 @@ export default function SettingsSheet({ open, onClose }) {
       setIdCopied(true);
       setTimeout(() => setIdCopied(false), 1800);
     } catch { /* clipboard denied — the id is still visible to transcribe */ }
+  }
+
+  // Attach an email to the CURRENT (anonymous) account → Supabase sends a
+  // confirmation link; once tapped, the account is permanent and this same
+  // email can sign into it anywhere.
+  async function linkEmail() {
+    const addr = email.trim();
+    if (!addr || emailBusy) return;
+    setEmailBusy(true);
+    setEmailMsg(null);
+    const { error } = await supabase.auth.updateUser({ email: addr });
+    setEmailBusy(false);
+    setEmailMsg(error
+      ? error.message
+      : "confirmation sent — open the link and your box is backed up");
+  }
+
+  // Returning user on a new device: magic-link sign-in to the account that
+  // email is linked to. shouldCreateUser:false so a typo can't silently
+  // mint a fresh empty account.
+  async function sendSignInLink() {
+    const addr = email.trim();
+    if (!addr || emailBusy) return;
+    setEmailBusy(true);
+    setEmailMsg(null);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: false },
+    });
+    setEmailBusy(false);
+    setEmailMsg(error
+      ? "no box is linked to that email — back this one up first"
+      : "sign-in link sent — open it on this device");
   }
 
   function updateDefaults(patch) {
@@ -200,18 +254,131 @@ export default function SettingsSheet({ open, onClose }) {
             </span>
           </div>
 
-          {/* Account — the invisible anonymous sign-in's id. Tap to copy
-              (used once for the 014 data-claim; harmless otherwise). */}
+          {/* ── Account ──────────────────────────────────────────────────── */}
+          <div style={{
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: dimColor,
+            margin: "20px 0 8px",
+          }}>
+            account
+          </div>
+
+          {/* The invisible sign-in's id — tap to copy (used for the one-time
+              data claim). A failed sign-in shows the REAL error, not a mute
+              "not signed in". */}
           <div onClick={copyUserId} style={{ ...rowStyle, cursor: userId ? "pointer" : "default" }}>
-            <span style={labelStyle}>account</span>
+            <span style={labelStyle}>account id</span>
             <span style={{
               fontFamily: "'Noto Sans Mono', monospace",
               fontSize: 11,
-              color: idCopied ? accent : dimColor,
+              maxWidth: "60%",
+              textAlign: "right",
+              color: idCopied ? accent : authError ? "#a04040" : dimColor,
             }}>
-              {idCopied ? "copied" : userId ? `${userId.slice(0, 8)}…` : "not signed in"}
+              {idCopied ? "copied" : userId ? `${userId.slice(0, 8)}…` : authError ?? "signing in…"}
             </span>
           </div>
+
+          {/* Backup email — decks live on the account; an email makes the
+              account recoverable anywhere (magic link), so clearing the
+              browser can never eat a curated deck. The address is used for
+              nothing else. */}
+          {userEmail ? (
+            <div style={{ ...rowStyle, cursor: "default" }}>
+              <span style={labelStyle}>backed up to</span>
+              <span style={{
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 11,
+                color: accent,
+              }}>
+                {userEmail}
+              </span>
+            </div>
+          ) : (
+            <div style={{ ...rowStyle, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+              <span style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: dimColor,
+              }}>
+                add an email so your decks survive new devices and cleared
+                browsers — it's used for nothing else
+              </span>
+              <input
+                type="email"
+                placeholder="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+                autoCapitalize="off"
+                spellCheck={false}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: 44,
+                  background: "transparent",
+                  color: textColor,
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 13,
+                  border: `1px solid ${borderColor}`,
+                  padding: "0 12px",
+                  borderRadius: 0,
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={linkEmail}
+                  disabled={emailBusy || !email.trim() || !userId}
+                  style={{
+                    minHeight: 44, flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${accent}`,
+                    color: accent,
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    cursor: "pointer",
+                    opacity: emailBusy || !email.trim() || !userId ? 0.5 : 1,
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  back up this box
+                </button>
+                <button
+                  onClick={sendSignInLink}
+                  disabled={emailBusy || !email.trim()}
+                  style={{
+                    minHeight: 44, flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${borderColor}`,
+                    color: dimColor,
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    cursor: "pointer",
+                    opacity: emailBusy || !email.trim() ? 0.5 : 1,
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  sign in to my box
+                </button>
+              </div>
+              {emailMsg && (
+                <span style={{
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: dimColor,
+                }}>
+                  {emailMsg}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Colophon */}
           <a

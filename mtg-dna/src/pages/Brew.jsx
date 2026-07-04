@@ -112,6 +112,81 @@ function wrecQueryCategory(q) {
   return q?.startsWith(WREC_QUERY_PREFIX) ? q.slice(WREC_QUERY_PREFIX.length) : null;
 }
 
+// ── In-stack narrowing ───────────────────────────────────────────────────────
+// A legend brew's swipe stack is a DB relevance ranking (brew_stack / tag_stack),
+// NOT a Scryfall query — so "tweak what I'm looking at" is a CLIENT-SIDE filter
+// over the cards already dealt, preserving the EDHREC synergy ordering, never a
+// fresh generic search that would throw the ranking away (Ben, 2026-07-04: narrow
+// Zhulodok to drop Eldrazi without losing relevance). We support the tweaks that
+// matter mid-swipe on a phone, evaluated against fields the stack cards carry
+// (name/type_line/oracle_text/cmc):
+//   t:/type:   include only cards whose type line contains the value  (t:dragon)
+//   -t:/-type: exclude cards whose type line contains the value       (-t:eldrazi)
+//   o:/oracle: oracle-text contains (and -o: to exclude)
+//   cmc/mv + >=,<=,=,>,<  numeric mana-value bound   (cmc<=4, -mv>6)
+//   bare word  name OR type OR oracle-text contains (and -word to exclude)
+// Terms AND together. A card outside the relevant stack (beyond the top-N) is out
+// of scope by design — that's the deliberate cost of keeping relevance.
+function parseNarrowTokens(input) {
+  // Split on whitespace but keep "quoted phrases" and key:"quoted vals" whole.
+  const tokens = (input ?? "").match(/-?(?:[a-z]+:"[^"]*"|"[^"]*"|\S+)/gi) ?? [];
+  const preds = [];
+  for (const raw of tokens) {
+    const neg = raw.startsWith("-");
+    const tok = neg ? raw.slice(1) : raw;
+    const cmp = tok.match(/^(?:cmc|mv)(>=|<=|=|>|<)(\d+(?:\.\d+)?)$/i);
+    if (cmp) { preds.push({ kind: "cmc", op: cmp[1], n: parseFloat(cmp[2]), neg }); continue; }
+    const kv = tok.match(/^([a-z]+):(.*)$/i);
+    if (kv) {
+      const key = kv[1].toLowerCase();
+      const val = kv[2].replace(/^"|"$/g, "").toLowerCase();
+      if (!val) continue;
+      if (key === "t" || key === "type")   { preds.push({ kind: "field", field: "type_line",   val, neg }); continue; }
+      if (key === "o" || key === "oracle") { preds.push({ kind: "field", field: "oracle_text", val, neg }); continue; }
+      // Unknown operator (c:, pow:, id:, otag: …) can't be answered from the
+      // cached fields — degrade to a loose free-text contains of the whole token
+      // rather than silently matching nothing.
+      preds.push({ kind: "field", field: "any", val: tok.toLowerCase(), neg }); continue;
+    }
+    const word = tok.replace(/^"|"$/g, "").toLowerCase();
+    if (word) preds.push({ kind: "field", field: "any", val: word, neg });
+  }
+  return preds;
+}
+
+function cmpNum(a, op, b) {
+  switch (op) {
+    case ">=": return a >= b;
+    case "<=": return a <= b;
+    case ">":  return a > b;
+    case "<":  return a < b;
+    default:   return a === b; // "="
+  }
+}
+
+function cardMatchesNarrow(card, preds) {
+  for (const p of preds) {
+    let hit;
+    if (p.kind === "cmc") {
+      const c = typeof card.cmc === "number" ? card.cmc : null;
+      hit = c !== null && cmpNum(c, p.op, p.n);
+    } else {
+      const hay = p.field === "any"
+        ? `${card.name ?? ""}\n${card.type_line ?? ""}\n${card.oracle_text ?? ""}`.toLowerCase()
+        : (card[p.field] ?? "").toLowerCase();
+      hit = hay.includes(p.val);
+    }
+    if (p.neg ? hit : !hit) return false;
+  }
+  return true;
+}
+
+function applyNarrow(cards, input) {
+  const preds = parseNarrowTokens(input);
+  if (!preds.length) return cards;
+  return cards.filter(c => cardMatchesNarrow(c, preds));
+}
+
 // The RPC stack arrives relevance-ordered (per-legend EDHREC synergy first,
 // then global EDHREC rank — brew_stack v2); name/CMC preferences re-sort it
 // client-side (the live-search path sorts server-side via the order param
@@ -199,6 +274,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [brewMode, setBrewMode] = useState(null);
 
   const [query, setQuery]           = useState("");
+  // The user's in-stack narrowing terms (legend sessions only) — a client-side
+  // filter over the relevance/wrec stack that preserves its ordering. Separate
+  // from `query` (which stays the stack IDENTITY: ""/-t:land default, wrec:cat)
+  // so resume can rebuild the same stack and then re-apply the filter.
+  const [stackNarrow, setStackNarrow] = useState("");
   const [sessionLabel, setSessionLabel] = useState(null);
   const [swipeCards, setSwipeCards] = useState([]);
   const [swipeIndex, setSwipeIndex] = useState(0);
@@ -232,6 +312,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
 
   const writeQueueRef = useRef([]);
   const flushingRef   = useRef(false);
+
+  // The full, un-narrowed relevance/wrec stack for the active seed. Narrowing
+  // and sort re-derive the swipe queue from this, so clearing a filter restores
+  // the whole stack rather than a progressively-shrunk remainder.
+  const baseStackRef = useRef([]);
 
   // ── Backup nudge (Ben 2026-07-03): zero barrier to START brewing, but once
   // someone is >9 kept cards deep they've built something worth keeping —
@@ -307,6 +392,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     if (!session || brewView !== "shell") return;
     setBrewMode("legend");
     setSessionLabel(session.legend.name);
+    // A new session starts un-narrowed; resume restores any saved filter below.
+    setStackNarrow("");
+    baseStackRef.current = [];
     // Backup-nudge state resets per session; the account's email status is a
     // local session read (no network).
     initialDeckSizeRef.current = null;
@@ -432,12 +520,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // excluded on top of the RPC's deck-row exclusion.
   async function handleAddMore(category) {
     const cards = await fetchCategoryStack(category, legendColorIdentity, "edhrec", "asc");
-    const exclude = new Set([
-      ...existingCardRows.map(r => r.card_name),
-      ...decidedNamesRef.current,
-    ]);
-    const filtered = cards.filter(c => !exclude.has(c.name));
+    baseStackRef.current = cards;
+    const filtered = buildSwipeCards(cards, "", "edhrec", "asc");
     if (!filtered.length) throw new Error("no cards to deal for this category");
+    setStackNarrow("");
     setQuery(`${WREC_QUERY_PREFIX}${category}`);
     setSwipeOrder("edhrec");
     setSwipeDir("asc");
@@ -445,6 +531,20 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSwipeIndex(0);
     setReviewOrigin("swipe");
     setBrewView("swipe");
+  }
+
+  // Derive the swipe queue from a full base stack: drop everything already in
+  // the deck or decided this session, apply the in-stack narrow, then order it
+  // (edhrec order reproduces the RPC's exact relevance ranking from the cards'
+  // synergy/theme_boost/edhrec_rank). One place so seed, resume, add-more, sort,
+  // and narrow all build the queue identically.
+  function buildSwipeCards(base, narrow, order, dir, excludeRows = existingCardRows) {
+    const exclude = new Set([
+      ...excludeRows.map(r => r.card_name),
+      ...decidedNamesRef.current,
+    ]);
+    const kept = applyNarrow(base, narrow).filter(c => !exclude.has(c.name));
+    return sortStack(kept, order, dir);
   }
 
   // Default seed for the legend-attached session's initial queue — relevance-
@@ -460,16 +560,17 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const rawQuery = defaults.excludeLands ? "-t:land" : "";
       const cards = await fetchDefaultStack(colorIdentity, defaults.sort, "asc", defaults.excludeLands);
       if (!cards.length) throw new Error("No cards found for that query.");
-      // Exclude every card already in the deck, on either board — recomputed
-      // from live deck_cards on every entry, not just the session that first
-      // seeded the queue — plus anything decided so far this session.
-      const exclude = new Set([...excludeRows.map(r => r.card_name), ...decidedNamesRef.current]);
+      // A fresh seed clears any in-stack narrow. buildSwipeCards excludes every
+      // card already in the deck (recomputed from live deck_cards on every
+      // entry) plus anything decided so far this session.
+      baseStackRef.current = cards;
+      setStackNarrow("");
       setQuery(rawQuery);
       // Reflect the seed's actual order in the sort control so the label names
       // the order applied (the earlier label-accuracy fix).
       setSwipeOrder(defaults.sort);
       setSwipeDir("asc");
-      setSwipeCards(cards.filter(c => !exclude.has(c.name)));
+      setSwipeCards(buildSwipeCards(cards, "", defaults.sort, "asc", excludeRows));
       setSwipeIndex(0);
       if (setView) setBrewView("swipe");
     } catch (err) {
@@ -500,6 +601,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const order    = persisted.order ?? getBrewDefaults().sort;
       const dir      = persisted.dir ?? "asc";
       const rawQuery = persisted.query ?? "";
+      const narrow   = persisted.narrow ?? "";
       // A resumed default seed goes back through the relevance stack, not the
       // generic live search — otherwise reopening a legend would silently swap
       // its tag-filtered stack for an unfiltered one. A persisted wrec: marker
@@ -513,9 +615,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       } else {
         ({ cards } = await fetchFirstPageForSwipe(withColorIdentity(rawQuery, colorIdentity), null, { order, dir }));
       }
-      const exclude = new Set([...excludeRows.map(r => r.card_name), ...decidedNamesRef.current]);
-      const filtered = cards.filter(c => !exclude.has(c.name));
+      // Re-apply the saved in-stack narrow on top of the rebuilt base stack.
+      baseStackRef.current = cards;
+      const filtered = buildSwipeCards(cards, narrow, order, dir, excludeRows);
       if (!filtered.length) return false; // empty/stale → fall back to default seed
+      setStackNarrow(narrow);
       setQuery(rawQuery);
       setSwipeOrder(order);
       setSwipeDir(dir);
@@ -538,9 +642,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   useEffect(() => {
     if (!session?.legend?.id || swipeCards.length === 0) return;
     saveBrewSession(session.legend.id, {
-      query, order: swipeOrder, dir: swipeDir, index: swipeIndex,
+      query, narrow: stackNarrow, order: swipeOrder, dir: swipeDir, index: swipeIndex,
     });
-  }, [session, query, swipeOrder, swipeDir, swipeIndex, swipeCards.length]);
+  }, [session, query, stackNarrow, swipeOrder, swipeDir, swipeIndex, swipeCards.length]);
 
   // A flick is a write: each decklist/maybe decision (and its undo) is
   // queued and applied to deck_cards immediately, fire-and-forget, so the
@@ -777,6 +881,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   function resetBrew() {
     setBrewMode(null);
     setQuery("");
+    setStackNarrow("");
+    baseStackRef.current = [];
     setSessionLabel(null);
     setSwipeCards([]);
     setSwipeIndex(0);
@@ -821,23 +927,41 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     }
   }
 
+  // The in-swipe search box for a legend session NARROWS the current relevance/
+  // wrec stack client-side instead of running a generic Scryfall search — the
+  // EDHREC ordering is preserved and only cards the stack already holds are ever
+  // shown (Ben's "keep relevance" call). Empty terms clear the filter and
+  // restore the full stack. Returns the runSearch-shaped result so SearchScreen's
+  // error/empty handling is unchanged.
+  function applyStackNarrow(terms) {
+    const trimmed = (terms ?? "").trim();
+    const next = buildSwipeCards(baseStackRef.current, trimmed, swipeOrder, swipeDir);
+    if (!next.length) {
+      const message = "No cards in this stack match that filter.";
+      setError(message);
+      return { ok: false, kind: "empty", message };
+    }
+    setError(null);
+    setStackNarrow(trimmed);
+    setSwipeCards(next);
+    setSwipeIndex(0);
+    setBrewView("swipe");
+    return { ok: true };
+  }
+
   function handleSortChange(order, dir) {
     setSwipeOrder(order);
     setSwipeDir(dir);
-    // An RPC-seeded stack (relevance OR wrec category) re-sorts in place
-    // (its cards carry matched_tags + edhrec_rank) — re-running the generic
-    // live search here would silently swap the tag-filtered stack for an
-    // unfiltered one. Undecided position resets to the top, matching the
-    // re-fetch paths.
-    if (session && (isDefaultSeedQuery(query) || wrecQueryCategory(query)) && swipeCards.some(c => c.matched_tags)) {
-      setSwipeCards(sortStack(swipeCards, order, dir));
+    // A legend session always owns a client-side stack (relevance or wrec,
+    // possibly narrowed) — re-derive it from the base so sorting never triggers
+    // a generic search that would drop the ranking or the active narrow.
+    // Undecided position resets to the top, matching the re-fetch paths.
+    if (session) {
+      setSwipeCards(buildSwipeCards(baseStackRef.current, stackNarrow, order, dir));
       setSwipeIndex(0);
       return;
     }
-    // Re-run on any active session even when the query is empty (lands-included
-    // default seeds with no -t:land term) — the color-identity constraint alone
-    // is a valid query.
-    if (query || session) runSearch(query, order, dir, sessionLabel);
+    if (query) runSearch(query, order, dir, sessionLabel);
   }
 
   // Non-session flows (mode select / Loki dev seed) have no deck yet —
@@ -1052,10 +1176,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
 
         {brewView === "search" && (
           <SearchScreen
-            onSearch={runSearch}
+            onSearch={session ? applyStackNarrow : runSearch}
             loading={loading}
             error={error}
-            initialQuery={query}
+            // Legend sessions narrow the current stack — prefill the box with the
+            // active filter (not `query`, which is the stack identity), and drop
+            // into narrow mode (no otag chips: they can't be evaluated locally).
+            initialQuery={session ? stackNarrow : query}
+            narrowStack={!!session}
           />
         )}
 

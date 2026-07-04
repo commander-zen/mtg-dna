@@ -73,7 +73,7 @@ function chipExpression(chip) {
   return `(${chip.tags.map(t => `otag:${t}`).join(" or ")})`;
 }
 
-export default function SearchScreen({ onSearch, loading, error, initialQuery }) {
+export default function SearchScreen({ onSearch, loading, error, initialQuery, narrowStack = false }) {
   const initial = splitLandFilter(initialQuery);
   const [brewInput,     setBrewInput]     = useState(initial.clean);
   const [includeLands,  setIncludeLands]  = useState(initial.includeLands);
@@ -85,7 +85,9 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
 
   const isDisabled = loading;
   const hasChips = selectedChips.size > 0;
-  const canSearch = !isDisabled && (!includeLands || Boolean(brewInput.trim()) || hasChips);
+  // Narrow mode filters the current stack in place — an empty box is valid there
+  // (it clears the filter / shows all), so SEARCH stays enabled regardless.
+  const canSearch = !isDisabled && (narrowStack || !includeLands || Boolean(brewInput.trim()) || hasChips);
 
   function toggleChip(id) {
     setSelectedChips(prev => {
@@ -115,7 +117,8 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
     const chipParts = SEARCH_CHIPS.filter(c => selectedChips.has(c.id)).map(chipExpression);
     const combined = [input, ...chipParts].filter(Boolean).join(" ");
     const finalQuery = includeLands ? combined : `${combined} -t:land`.trim();
-    if (!finalQuery) return;
+    // Narrow mode allows an empty query — that's how you clear the filter.
+    if (!finalQuery && !narrowStack) return;
     if (input) saveToHistory(input);
     setHistoryIndex(-1);
     setDraftInput("");
@@ -170,10 +173,29 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
         <div style={{ flex: 1 }} />
 
         {/* ── Guided search chips — selected chips fold into the compiled
-              query on SEARCH (see handleSearch); toggling alone runs nothing. ── */}
-        <div style={{ marginBottom: 12 }}>
-          <SearchChips selected={selectedChips} onToggle={toggleChip} />
-        </div>
+              query on SEARCH (see handleSearch); toggling alone runs nothing.
+              Hidden in narrow mode: chips are otag theme filters, which can't be
+              evaluated against the already-dealt relevance stack. ── */}
+        {!narrowStack && (
+          <div style={{ marginBottom: 12 }}>
+            <SearchChips selected={selectedChips} onToggle={toggleChip} />
+          </div>
+        )}
+
+        {/* ── Narrow-mode hint — this filters the current stack, not a new search ── */}
+        {narrowStack && (
+          <div style={{
+            marginBottom: 8,
+            fontFamily: "var(--font-system)",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "var(--color-text-secondary)",
+          }}>
+            Filter this stack — relevance order is kept.{" "}
+            <span style={{ fontFamily: "'Noto Sans Mono', monospace" }}>-t:eldrazi</span>,{" "}
+            <span style={{ fontFamily: "'Noto Sans Mono', monospace" }}>cmc&lt;=4</span>, or a word.
+          </div>
+        )}
 
         {/* ── Input ── */}
         <div style={{ marginBottom: 0 }}>
@@ -184,7 +206,7 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
             onChange={e => { if (!isDisabled) setBrewInput(e.target.value); }}
             onKeyDown={handleBrewKeyDown}
             onFocus={() => { setHistoryIndex(-1); setDraftInput(""); }}
-            placeholder={rawMode ? "f:commander c:g cmc<=3 otag:ramp" : "What are you looking for?"}
+            placeholder={narrowStack ? "-t:eldrazi  cmc<=4" : (rawMode ? "f:commander c:g cmc<=3 otag:ramp" : "What are you looking for?")}
             autoComplete="off" autoCorrect="off" spellCheck={false}
             readOnly={isDisabled}
             style={{
@@ -208,7 +230,10 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
           />
         </div>
 
-        {/* ── Lands toggle — auto-seed/search exclude lands by default ── */}
+        {/* ── Lands toggle — auto-seed/search exclude lands by default. Hidden in
+              narrow mode: land inclusion is fixed by the seed, so the narrow can
+              only ever remove lands, never add them back — a dead control. ── */}
+        {!narrowStack && (
         <label style={{
           display: "flex", alignItems: "center", gap: 6,
           marginTop: 8, padding: "2px 0",
@@ -228,6 +253,7 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
           />
           include lands
         </label>
+        )}
 
         {/* ── Win98 progress bar ── */}
         <Win98ProgressBar active={loading} />
@@ -269,7 +295,7 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery })
             letterSpacing: "0.12em",
             color: "var(--color-titlebar-text)",
           }}>
-            SEARCH
+            {narrowStack ? (brewInput.trim() ? "FILTER" : "SHOW ALL") : "SEARCH"}
           </span>
         </button>
 

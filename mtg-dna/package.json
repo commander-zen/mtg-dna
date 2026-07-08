@@ -8,6 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
     "gen:icons": "node scripts/gen-icons.mjs",
     "ingest:cards": "node scripts/ingest-cards.mjs",
     "ingest:tags": "node scripts/ingest-tags.mjs",
@@ -15,6 +17,10 @@
     "ingest:legend-edhrec": "node scripts/ingest-legend-edhrec.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
     "@supabase/supabase-js": "^2.107.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

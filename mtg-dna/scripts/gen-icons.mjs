@@ -9,9 +9,14 @@
 //   icon-maskable-512.png    manifest "maskable" (full-bleed dark, safe-zone inset)
 //   apple-touch-icon.png     iOS home screen  (180, full-bleed dark)
 //
+// Native-shell sources (into assets/, consumed by `npx @capacitor/assets generate`):
+//   icon.png                 1024, full-bleed dark — iOS/Android app icons
+//   splash.png / splash-dark.png
+//                            2732, dark canvas with the mark centered at ~30%
+//
 // Run: node scripts/gen-icons.mjs
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import sharp from 'sharp';
@@ -51,6 +56,22 @@ async function main() {
   await png(fullBleed, 512).then((b) => writeFileSync(join(OUT, 'icon-maskable-512.png'), b));
   await png(fullBleed, 180).then((b) => writeFileSync(join(OUT, 'apple-touch-icon.png'), b));
 
+  // Native-shell sources for @capacitor/assets (icon + splash, both platforms).
+  const CAP_ASSETS = join(root, 'assets');
+  mkdirSync(CAP_ASSETS, { recursive: true });
+  await png(fullBleed, 1024).then((b) => writeFileSync(join(CAP_ASSETS, 'icon.png'), b));
+  // Splash: 2732×2732 dark canvas, rounded-tile mark centered at ~30% width —
+  // the mark floats on the dark field rather than stretching edge-to-edge.
+  const mark = await png(source, 820);
+  const splash = await sharp({
+    create: { width: 2732, height: 2732, channels: 4, background: BODY_BG },
+  })
+    .composite([{ input: mark, gravity: 'center' }])
+    .png()
+    .toBuffer();
+  writeFileSync(join(CAP_ASSETS, 'splash.png'), splash);
+  writeFileSync(join(CAP_ASSETS, 'splash-dark.png'), splash);
+
   // Multi-res .ico (16/32/48) from the rounded-tile source.
   const icoSizes = [16, 32, 48];
   const icoPngs = await Promise.all(icoSizes.map((s) => png(source, s)));
@@ -66,6 +87,10 @@ async function main() {
     'icon-maskable-512.png',
     'apple-touch-icon.png',
   ]) {
+    console.log('  ' + f);
+  }
+  console.log('Native-shell sources generated into assets/:');
+  for (const f of ['icon.png', 'splash.png', 'splash-dark.png']) {
     console.log('  ' + f);
   }
 }

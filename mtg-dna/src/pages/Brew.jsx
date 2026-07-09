@@ -1065,7 +1065,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
 
   // Review's explicit bottom-zone controls — always the same two targets
   // regardless of how review was reached (unlike the chevron/hardware-back
-  // ladder above, which still depends on reviewOrigin).
+  // ladder above, which still depends on reviewOrigin). BREW (right) deals
+  // into the session's swipe queue — the same queue the legend-session
+  // effect seeds/resumes, so it's one path whether review was the landing
+  // point or a mid-swipe detour. HOME (left) exits to the Box.
   function goToSwipe() {
     setBrewView("swipe");
   }
@@ -1226,8 +1229,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             commander={session ? { name: session.legend.name, art: session.legend.image_uri } : null}
             cardTags={cardTags}
             onToggleTag={handleToggleTag}
-            onBack={session ? goToSwipe : undefined}
             onHome={session ? goHome : undefined}
+            onBrew={session ? goToSwipe : undefined}
             onDeleteDeck={session ? handleDeleteDeck : undefined}
             onAddMore={session ? handleAddMore : undefined}
           />

@@ -81,7 +81,7 @@ export default function ReviewScreen({
   live, onRemove,
   commander,
   cardTags, onToggleTag,
-  onBack, onHome,
+  onHome, onBrew,
   onDeleteDeck,
   onMoveCard,
   onAddMore,
@@ -460,9 +460,9 @@ export default function ReviewScreen({
     );
   }
 
-  // Bottom thumb-zone nav, live sessions only — mirrors the swipe screen's
-  // back-left pattern.
-  const showBottomNav = live && (onBack || onHome);
+  // Bottom thumb-zone nav, live sessions only — the deck list is the landing
+  // surface: HOME (exit to the Box) left, BREW (deal into the swipe) right.
+  const showBottomNav = live && (onHome || onBrew);
 
   return (
     <div style={{
@@ -682,7 +682,7 @@ export default function ReviewScreen({
         )}
 
         {/* Delete — the destructive act sits at the END of the list,
-            physically separated from export (top) and back/home (bottom nav)
+            physically separated from export (top) and home/brew (bottom nav)
             per the NN/g destructive-action rule, and confirms inline: the row
             expands in place, no modal. Deletes OUTRIGHT: the legend, its
             deck, cards, and tags all leave the Box — nothing survives. */}
@@ -811,9 +811,11 @@ export default function ReviewScreen({
 
       </div>
 
-      {/* Bottom thumb-zone nav — live sessions only. Mirrors the swipe screen's
-          back-left pattern: BACK resumes the swipe session where it left off,
-          HOME exits to the legend's DEX entry. Text labels, mono, ≥44px. */}
+      {/* Bottom thumb-zone nav — live sessions only. The deck list is the
+          landing surface after picking a commander: HOME (left) exits to the
+          Box, BREW (right) deals into the swipe stack for this deck — the
+          forward action, so it carries the emphasized color. Text labels,
+          mono, ≥44px. */}
       {showBottomNav && (
         <div style={{
           position: "fixed",
@@ -834,24 +836,6 @@ export default function ReviewScreen({
             padding: "0 12px",
           }}>
             <button
-              onClick={onBack}
-              aria-label="Back to swipe"
-              style={{
-                minHeight: 44,
-                display: "flex", alignItems: "center", gap: 6,
-                background: "transparent", border: "none",
-                color: "var(--text)",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.08em",
-                padding: "0 10px",
-                cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
-              back
-            </button>
-            <button
               onClick={onHome}
               aria-label="Home"
               style={{
@@ -866,8 +850,26 @@ export default function ReviewScreen({
                 WebkitTapHighlightColor: "transparent",
               }}
             >
-              home
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>home</span>
+              home
+            </button>
+            <button
+              onClick={onBrew}
+              aria-label="Brew"
+              style={{
+                minHeight: 44,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "transparent", border: "none",
+                color: "var(--text)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.08em",
+                padding: "0 10px",
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              brew
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>style</span>
             </button>
           </div>
         </div>

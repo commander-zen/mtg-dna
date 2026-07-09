@@ -8,13 +8,13 @@ const DECK_GATE = 100;
 
 // The detail pane of the storage-box Home: the selected commander as a
 // device readout. LEFT = the actual card image ("sprite"); RIGHT = stacked
-// label/value fields; footer = brew button + the deck row. Fills its pane
-// height with no internal scroll.
+// label/value fields; footer = the deck row, the one door into the deck
+// list (brew lives on the deck list's bottom nav now, not here). Fills its
+// pane height with no internal scroll.
 export default function LegendIdentity({ legend, onBrew }) {
   const { theme, mode } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
   const [decks, setDecks] = useState(legend.decks ?? []);
-  const [brewPressed, setBrewPressed] = useState(false);
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
   const textColor   = mode === "light" ? theme.ink   : theme.white;
@@ -63,9 +63,9 @@ export default function LegendIdentity({ legend, onBrew }) {
     : typeLine;
   const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost ?? legend.mana_cost);
 
-  // ONE definition of "this legend's deck" — the deck row and the brew
-  // button below both use this same resolved deck, so they can never again
-  // point at different rows. See lib/legendDeck.js for the resolution rule.
+  // ONE definition of "this legend's deck" — the readout fields and the deck
+  // row below both use this same resolved deck, so they can never point at
+  // different rows. See lib/legendDeck.js for the resolution rule.
   const deck = resolveLegendDeck(decks);
   const total = deck ? deckTotal(deck) : 0;
   const complete = total >= DECK_GATE;
@@ -168,19 +168,21 @@ export default function LegendIdentity({ legend, onBrew }) {
         </div>
       </div>
 
-      {/* Footer — deck row + brew button. The deck row is ALWAYS rendered so
-          the footer height is constant: the sprite + readout never reflow or
-          compress based on whether a deck exists. No deck → a dimmed
-          "no deck yet" with 0/100 in the same footprint, non-interactive. */}
-      <div style={{ flexShrink: 0, paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Footer — the deck row, ALWAYS rendered and ALWAYS tappable: it is
+          now the only door into the deck list (which lands startView:"review",
+          Moxfield-style; brew deals from the deck list's bottom nav). With no
+          deck yet the row still opens the (empty) deck list — Brew.jsx creates
+          the deck on session start — so a fresh legend is never stranded.
+          Constant footprint either way: sprite + readout never reflow. */}
+      <div style={{ flexShrink: 0, paddingTop: 8 }}>
         <div
-          onClick={deck ? () => onBrew(legend, deck, { startView: "review" }) : undefined}
+          onClick={() => onBrew(legend, deck, { startView: "review" })}
           style={{
             display: "flex", alignItems: "center", gap: 10,
-            minHeight: 36,
+            minHeight: 44,
             padding: "6px 0",
             borderTop: `1px solid ${borderColor}`,
-            cursor: deck ? "pointer" : "default",
+            cursor: "pointer",
             WebkitTapHighlightColor: "transparent",
           }}
         >
@@ -203,37 +205,11 @@ export default function LegendIdentity({ legend, onBrew }) {
           </div>
           <span
             className="material-symbols-rounded"
-            style={{ fontSize: 16, color: dimColor, flexShrink: 0, opacity: deck ? 1 : 0.35 }}
+            style={{ fontSize: 16, color: dimColor, flexShrink: 0 }}
           >
             chevron_right
           </span>
         </div>
-
-        <button
-          onClick={() => onBrew(legend, deck)}
-          onPointerDown={() => setBrewPressed(true)}
-          onPointerUp={() => setBrewPressed(false)}
-          onPointerLeave={() => setBrewPressed(false)}
-          style={{
-            display: "block",
-            width: "100%",
-            height: 44,
-            background: brewPressed ? ruleColor : "transparent",
-            border: `1px solid ${ruleColor}`,
-            borderRadius: 0,
-            padding: 0,
-            fontFamily: "'Zilla Slab', serif",
-            fontSize: 16,
-            letterSpacing: "0.04em",
-            textTransform: "lowercase",
-            textAlign: "center",
-            color: brewPressed ? theme.base : ruleColor,
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          brew
-        </button>
       </div>
     </div>
   );

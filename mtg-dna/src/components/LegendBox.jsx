@@ -302,7 +302,9 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
     const insertedCards = [];
     for (let i = 0; i < toInsert.length; i += 100) {
       const rows = toInsert.slice(i, i + 100).map(l => ({
-        deck_id: deckId, card_name: l.name, quantity: l.quantity, section: "decklist",
+        // URL imports carry the provider's maybeboard/sideboard as "maybe";
+        // pasted text has no section and defaults to the decklist, as ever.
+        deck_id: deckId, card_name: l.name, quantity: l.quantity, section: l.section ?? "decklist",
       }));
       const { data, error: cardError } = await supabase
         .from("deck_cards")

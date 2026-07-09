@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { searchCommanders, getCardImage } from "../lib/scryfall.js";
-import { prepareImport } from "../lib/moxfieldImport.js";
+import { prepareImport, prepareImportFromUrl, isDeckUrl } from "../lib/moxfieldImport.js";
 
 export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
   const { theme, mode } = useTheme();
@@ -27,10 +27,17 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
     setParsing(true);
     setImportResult(null);
     try {
-      const result = await prepareImport(pasteText);
+      // One box, two doors: a Moxfield/Archidekt deck URL goes through the
+      // /api/deck proxy (tags never transfer — auto-tagging owns that now);
+      // anything else parses as pasted decklist text, as ever.
+      const result = isDeckUrl(pasteText)
+        ? await prepareImportFromUrl(pasteText)
+        : await prepareImport(pasteText);
       setPreview(result);
       setPickedKey(null);
       setManualCommander("");
+    } catch (err) {
+      setImportResult({ error: err.message ?? "import failed" });
     } finally {
       setParsing(false);
     }
@@ -326,7 +333,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
               onFocus={pinViewportOnFocus}
-              placeholder={"paste a Moxfield bulk-edit decklist…\n1 Sol Ring #ramp\n1 Cyclonic Rift #mass-disruption"}
+              placeholder={"paste a deck URL…\nmoxfield.com/decks/… or archidekt.com/decks/…\n\n(or a plain decklist, one card per line)"}
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               rows={6}
               style={{

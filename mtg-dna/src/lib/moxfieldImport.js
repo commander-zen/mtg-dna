@@ -113,15 +113,58 @@ export function pickCommander(resolvedLines) {
   return { commander: null, candidates: marked.length > 1 ? marked : eligible };
 }
 
-// One door for the whole paste→preview pipeline: parse, resolve, dedupe,
-// and attempt commander detection. Never throws — resolution failures show
-// up as `unresolved` lines instead.
-export async function prepareImport(text) {
-  const parsed = parseMoxfieldText(text);
-  const resolved = await resolveImportLines(parsed);
+// Everything after parsing is shared between the paste path and the URL
+// path: resolve against the cache, dedupe, split unresolved, detect the
+// commander.
+async function finishImport(parsedLines) {
+  const resolved = await resolveImportLines(parsedLines);
   const merged = mergeDuplicateLines(resolved);
   const unresolved = merged.filter(l => !l.card);
   const resolvedLines = merged.filter(l => l.card);
   const { commander, candidates } = pickCommander(resolvedLines);
   return { resolvedLines, unresolved, commander, candidates };
+}
+
+// One door for the whole paste→preview pipeline: parse, resolve, dedupe,
+// and attempt commander detection. Never throws — resolution failures show
+// up as `unresolved` lines instead.
+export async function prepareImport(text) {
+  return finishImport(parseMoxfieldText(text));
+}
+
+// ── Deck-URL import (Moxfield / Archidekt) ────────────────────────────────────
+// Both providers block browser CORS (verified live 2026-07-09), so the fetch
+// goes through our own /api/deck proxy, which normalizes either provider to
+// { name, commanders: [names], cards: [{ name, quantity, section }] }.
+// The Vite dev server and the Capacitor shell aren't the Vercel origin, so
+// they call the deployed function absolutely; in production it's same-origin.
+const DECK_API_BASE =
+  typeof window !== "undefined" && /\.vercel\.app$/.test(window.location.hostname)
+    ? ""
+    : "https://mtg-dna.vercel.app";
+
+export function isDeckUrl(text) {
+  return /(?:moxfield\.com\/decks\/[A-Za-z0-9_-]+|archidekt\.com\/decks\/\d+)/i.test(text ?? "");
+}
+
+// URL → the same preview shape prepareImport returns. Unlike the paste path
+// this CAN throw (network/private deck) — the caller surfaces the message.
+// Tags never come from a URL import (auto-tagging owns that now); the
+// maybe/sideboard sections ride along as `section` on each line.
+export async function prepareImportFromUrl(url) {
+  const res = await fetch(`${DECK_API_BASE}/api/deck?url=${encodeURIComponent(url.trim())}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? `import failed (${res.status})`);
+
+  const lines = [
+    ...(body.commanders ?? []).map(name => ({
+      quantity: 1, name, tags: [], raw: name, isCommander: true,
+    })),
+    ...(body.cards ?? []).map(c => ({
+      quantity: c.quantity ?? 1, name: c.name, tags: [], raw: c.name,
+      isCommander: false, section: c.section === "maybe" ? "maybe" : "decklist",
+    })),
+  ];
+  if (lines.length === 0) throw new Error("that deck came back empty");
+  return finishImport(lines);
 }

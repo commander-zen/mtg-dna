@@ -21,7 +21,7 @@
 // then this honest default may or may not pass their filter, and a 403
 // surfaces to the user as "paste the text instead". Archidekt has no such
 // gate.
-const UA = process.env.MOXFIELD_UA || "Mozilla/5.0 magikdex/1.0 (+https://mtg-dna.vercel.app)";
+const UA = process.env.MOXFIELD_UA || "Mozilla/5.0 magikdex/1.0 (+https://magikdex.vercel.app)";
 
 function parseDeckUrl(url) {
   const mox = url.match(/moxfield\.com\/decks\/([A-Za-z0-9_-]+)/i);

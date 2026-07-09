@@ -141,7 +141,7 @@ export async function prepareImport(text) {
 const DECK_API_BASE =
   typeof window !== "undefined" && /\.vercel\.app$/.test(window.location.hostname)
     ? ""
-    : "https://mtg-dna.vercel.app";
+    : "https://magikdex.vercel.app";
 
 export function isDeckUrl(text) {
   return /(?:moxfield\.com\/decks\/[A-Za-z0-9_-]+|archidekt\.com\/decks\/\d+)/i.test(text ?? "");

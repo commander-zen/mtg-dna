@@ -811,11 +811,11 @@ export default function ReviewScreen({
 
       </div>
 
-      {/* Bottom thumb-zone nav — live sessions only. The deck list is the
-          landing surface after picking a commander: HOME (left) exits to the
-          Box, BREW (right) deals into the swipe stack for this deck — the
-          forward action, so it carries the emphasized color. Text labels,
-          mono, ≥44px. */}
+      {/* Bottom thumb-zone nav — live sessions only. HOME sits bottom-RIGHT
+          to match the swipe screen's home (Ben: "home needs to be in the
+          same spot" — one thumb position app-wide); BREW (left) deals into
+          the swipe stack for this deck — the forward action, so it carries
+          the emphasized color. Text labels, mono, ≥44px. */}
       {showBottomNav && (
         <div style={{
           position: "fixed",
@@ -836,24 +836,6 @@ export default function ReviewScreen({
             padding: "0 12px",
           }}>
             <button
-              onClick={onHome}
-              aria-label="Home"
-              style={{
-                minHeight: 44,
-                display: "flex", alignItems: "center", gap: 6,
-                background: "transparent", border: "none",
-                color: "var(--muted)",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.08em",
-                padding: "0 10px",
-                cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>home</span>
-              home
-            </button>
-            <button
               onClick={onBrew}
               aria-label="Brew"
               style={{
@@ -868,8 +850,26 @@ export default function ReviewScreen({
                 WebkitTapHighlightColor: "transparent",
               }}
             >
-              brew
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>style</span>
+              brew
+            </button>
+            <button
+              onClick={onHome}
+              aria-label="Home"
+              style={{
+                minHeight: 44,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "transparent", border: "none",
+                color: "var(--muted)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.08em",
+                padding: "0 10px",
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              home
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>home</span>
             </button>
           </div>
         </div>

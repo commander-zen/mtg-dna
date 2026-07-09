@@ -70,18 +70,6 @@ export async function tagCard(deckCardId, tag) {
   if (error) throw error;
 }
 
-// Confirming an auto-suggested tag: tapping an outlined (auto) chip fills it
-// in as the user's own — the row flips source instead of being removed.
-// A second tap (now a plain user tag) removes it via untagCard.
-export async function confirmAutoTag(deckCardId, tag) {
-  const { error } = await supabase
-    .from("deck_card_tags")
-    .update({ source: "user" })
-    .eq("deck_card_id", deckCardId)
-    .eq("tag", tag);
-  if (error) throw error;
-}
-
 export async function untagCard(deckCardId, tag) {
   const { error } = await supabase
     .from("deck_card_tags")

@@ -8,7 +8,7 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, fetchBrewStack, fetchTagStack, getCardDataBatch } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
-import { tagCard, untagCard, confirmAutoTag, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
+import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -647,6 +647,26 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     });
   }, [session, query, stackNarrow, swipeOrder, swipeDir, swipeIndex, swipeCards.length]);
 
+  // Warm the upcoming card ART off-swipe (Ben's load-time complaint): the
+  // queue DATA already seeds silently in the background when the deck list
+  // opens, but the images only started fetching once the swipe mounted — so
+  // the first card painted late. This fetches the first slots' art into the
+  // browser cache while the user is still reading the deck list; SwipeScreen's
+  // own next-3 preloader owns it after mount. The Set keeps each URL to one
+  // Image() churn per session.
+  const warmedArtRef = useRef(new Set());
+  useEffect(() => {
+    if (brewView === "swipe" || swipeCards.length === 0) return;
+    const from = Math.max(0, swipeIndex - 1);
+    for (const c of swipeCards.slice(from, swipeIndex + 6)) {
+      const url = getCardImage(c, "large") ?? getCardImage(c, "normal");
+      if (!url || warmedArtRef.current.has(url)) continue;
+      warmedArtRef.current.add(url);
+      const img = new Image();
+      img.src = url;
+    }
+  }, [brewView, swipeCards, swipeIndex]);
+
   // A flick is a write: each decklist/maybe decision (and its undo) is
   // queued and applied to deck_cards immediately, fire-and-forget, so the
   // gesture/animation never blocks on the network. Failed writes retry with
@@ -844,24 +864,19 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       if (!deckCardId) return;
     }
     const had = (entry?.tags ?? []).includes(tag);
-    // Tap ladder (Ben): outlined auto chip → tap CONFIRMS it (fills in as a
-    // user tag, source flips to 'user') → tap again removes. A plain user
-    // tag removes on first tap; an absent tag is added as the user's.
-    const confirming = had && (entry?.autoTags ?? []).includes(tag);
+    // Tap toggle (Ben, 2026-07-09): a chip either EMPTIES to blank (present —
+    // including a pre-tagged auto recommendation) or FILLS as the user's
+    // (absent). This replaces the old confirm ladder, which made clearing a
+    // recommendation two taps.
     const prevEntry = entry ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
     setCardTags(prev => {
       const cur = prev[key] ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
-      const tags = confirming ? cur.tags
-        : had ? cur.tags.filter(t => t !== tag)
-        : [...cur.tags, tag];
-      const autoTags = (confirming || had)
-        ? (cur.autoTags ?? []).filter(t => t !== tag)
-        : (cur.autoTags ?? []);
+      const tags = had ? cur.tags.filter(t => t !== tag) : [...cur.tags, tag];
+      const autoTags = had ? (cur.autoTags ?? []).filter(t => t !== tag) : (cur.autoTags ?? []);
       return { ...prev, [key]: { ...cur, id: deckCardId, tags, autoTags } };
     });
     try {
-      if (confirming) await confirmAutoTag(deckCardId, tag);
-      else if (had) await untagCard(deckCardId, tag);
+      if (had) await untagCard(deckCardId, tag);
       else await tagCard(deckCardId, tag);
     } catch {
       setCardTags(prev => ({ ...prev, [key]: prevEntry }));

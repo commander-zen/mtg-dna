@@ -37,7 +37,7 @@ export default function LegendIdentity({ legend, onBrew }) {
     return () => { cancelled = true; };
   }, [legend.name]);
 
-  // Re-fetch this legend's decks so counts/status reflect the latest save —
+  // Re-fetch this legend's decks so counts reflect the latest save —
   // the `legend` prop carries the snapshot from when the slot was tapped.
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +163,6 @@ export default function LegendIdentity({ legend, onBrew }) {
               {manaCost || "—"}
             </div>
           </div>
-          {field("status", deck?.status)}
           {field("deck", `${total}/${DECK_GATE}`, complete ? ruleColor : textColor)}
         </div>
       </div>

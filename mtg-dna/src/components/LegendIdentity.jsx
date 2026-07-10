@@ -67,7 +67,10 @@ export default function LegendIdentity({ legend, onBrew }) {
   // row below both use this same resolved deck, so they can never point at
   // different rows. See lib/legendDeck.js for the resolution rule.
   const deck = resolveLegendDeck(decks);
-  const total = deck ? deckTotal(deck) : 0;
+  // No deck row yet still counts 1: the commander is part of the 100 but is
+  // never written to deck_cards (deckTotal's own rule) — without this, the
+  // readout flips 0/100 → 1/100 the moment the deck list is first opened.
+  const total = deck ? deckTotal(deck) : 1;
   const complete = total >= DECK_GATE;
 
   const field = (label, value, valueColor) => (

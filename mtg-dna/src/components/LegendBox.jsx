@@ -490,7 +490,10 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
           if (g < legends.length) {
             const legend = legends[g];
             const legendDeck = resolveLegendDeck(legend.decks);
-            const highest = legendDeck ? deckTotal(legendDeck) : 0;
+            // Deckless legends still count 1 — the commander itself (same
+            // rule as deckTotal; keeps the gate badge from jumping 0→1 when
+            // the deck row is lazily created on first deck-list open).
+            const highest = legendDeck ? deckTotal(legendDeck) : 1;
             const gated = highest < DECK_GATE;
             const art = legend.image_uri;
             const noIdentity = !art && identityFailed.has(legend.id);

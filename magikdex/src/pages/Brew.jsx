@@ -830,13 +830,19 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // hands it to the same SwipeScreen in handMode. Cut/maybe write through the
   // SAME deck paths the review screen uses, so the decklist and every counter
   // update live — no parallel state.
-  async function enterHandMode() {
-    const names = [...new Set(decklist.map(c => c.name))];
+  async function enterHandMode(orderedNames) {
+    // The review stack flips through the deck in the SAME order the decklist is
+    // currently showing (Change 9) — ReviewScreen passes its display-ordered,
+    // de-duped names (its sort/group state); fall back to raw decklist order if
+    // none was handed in.
+    const names = orderedNames?.length
+      ? orderedNames
+      : [...new Set(decklist.map(c => c.name))];
     if (!names.length) return;
     setLoading(true);
     try {
       const { data } = await getCardDataBatch(names);
-      // Keep the decklist's own order; drop names the cache couldn't resolve.
+      // Preserve the passed order; drop names the cache couldn't resolve.
       const cards = names.map(n => data[n]).filter(Boolean);
       if (!cards.length) return;
       setHandCards(cards);

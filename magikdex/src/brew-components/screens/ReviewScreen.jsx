@@ -1180,7 +1180,12 @@ export default function ReviewScreen({
                 flip through. */}
             {onHand && totalCards > 0 && (
               <button
-                onClick={onHand}
+                onClick={() => onHand(
+                  // Flip through the deck in the SAME order it's displayed here
+                  // (Change 9) — flatten the current groups in display order.
+                  buildDeckGroups(groups.decklist, groupBy, sort, (n) => cardData[n])
+                    .flatMap(g => g.items.map(it => it.name))
+                )}
                 aria-label="Hand — flip through your deck"
                 style={{
                   minHeight: 44,

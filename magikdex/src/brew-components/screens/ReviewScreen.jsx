@@ -75,6 +75,132 @@ function buildMoxfieldExport(cardTags, commanderName) {
   return lines.join("\n");
 }
 
+// ── Decklist grouping / sorting (Change 6) ──────────────────────────────────
+// Moxfield-familiar organize controls, rendered in HELIX. Buckets are derived
+// from the resolved card data (type_line / cmc / color_identity); a card whose
+// data hasn't resolved yet falls into an "Other" / "MV ?" tail so nothing
+// vanishes from the list mid-load.
+
+// Type bucketing. Rules are evaluated IN ORDER, so a multi-type card lands in
+// its primary bucket (Artifact Creature → Creatures, Enchantment Land → Lands).
+// TYPE_ORDER is the on-screen reading order (Moxfield-familiar; lands last) and
+// is the one knob to re-sequence groups without touching bucketing. NOTE: the
+// exact live Moxfield sub-order couldn't be extracted (SPA); this is the
+// standard type precedence — adjust to taste.
+const TYPE_RULES = [
+  [/\bCreature\b/,     "Creature"],
+  [/\bPlaneswalker\b/, "Planeswalker"],
+  [/\bBattle\b/,       "Battle"],
+  [/\bLand\b/,         "Land"],
+  [/\bInstant\b/,      "Instant"],
+  [/\bSorcery\b/,      "Sorcery"],
+  [/\bArtifact\b/,     "Artifact"],
+  [/\bEnchantment\b/,  "Enchantment"],
+];
+const TYPE_ORDER = ["Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Other"];
+const TYPE_LABEL = {
+  Creature: "CREATURES", Planeswalker: "PLANESWALKERS", Battle: "BATTLES",
+  Instant: "INSTANTS", Sorcery: "SORCERIES", Artifact: "ARTIFACTS",
+  Enchantment: "ENCHANTMENTS", Land: "LANDS", Other: "OTHER",
+};
+function typeBucket(card) {
+  const t = card?.type_line ?? "";
+  for (const [re, bucket] of TYPE_RULES) if (re.test(t)) return bucket;
+  return "Other";
+}
+
+// CMC / mana-value bucketing — 0..6 then a 7+ tail; unresolved cards last.
+function cmcBucket(card) {
+  const c = typeof card?.cmc === "number" ? card.cmc : null;
+  if (c === null) return "MV ?";
+  const n = Math.floor(c);
+  return n >= 7 ? "MV 7+" : `MV ${n}`;
+}
+function cmcRank(key) {
+  if (key === "MV ?")  return 999;
+  if (key === "MV 7+") return 7;
+  return parseInt(key.slice(3), 10);
+}
+
+// Colour bucketing off colour IDENTITY (the field the cache carries — a close
+// proxy for Moxfield's colour grouping). Mono in WUBRG order, then multi, then
+// colourless.
+const WUBRG_LABEL = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+const COLOR_ORDER = ["White", "Blue", "Black", "Red", "Green", "Multicolor", "Colorless"];
+function colorBucket(card) {
+  const ci = card?.color_identity ?? [];
+  if (ci.length === 0) return "Colorless";
+  if (ci.length > 1)  return "Multicolor";
+  return WUBRG_LABEL[ci[0]] ?? "Colorless";
+}
+
+// Order rows within a group. cardOf resolves a name → card (may be undefined).
+function sortItems(items, sort, cardOf) {
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  if (sort === "cmc") {
+    return [...items].sort((a, b) =>
+      ((cardOf(a.name)?.cmc ?? 99) - (cardOf(b.name)?.cmc ?? 99)) || byName(a, b));
+  }
+  if (sort === "color") {
+    const rank = n => {
+      const ci = cardOf(n)?.color_identity ?? [];
+      if (ci.length === 0) return 99;
+      if (ci.length > 1)  return 50;
+      return "WUBRG".indexOf(ci[0]);
+    };
+    return [...items].sort((a, b) => (rank(a.name) - rank(b.name)) || byName(a, b));
+  }
+  return [...items].sort(byName);
+}
+
+// Ordered groups for a section: [{ key, label, items }]. group === "none" is a
+// single unlabelled group (flat sorted list). Bucket order is fixed per mode
+// (type/colour by canonical order; cmc numerically).
+function buildDeckGroups(items, group, sort, cardOf) {
+  if (group === "none") {
+    return [{ key: "all", label: null, items: sortItems(items, sort, cardOf) }];
+  }
+  const bucketOf = group === "type"  ? n => typeBucket(cardOf(n))
+    : group === "color" ? n => colorBucket(cardOf(n))
+    :                     n => cmcBucket(cardOf(n));
+  const map = new Map();
+  for (const it of items) {
+    const b = bucketOf(it.name);
+    if (!map.has(b)) map.set(b, []);
+    map.get(b).push(it);
+  }
+  let keys;
+  if (group === "type")       keys = TYPE_ORDER.filter(k => map.has(k));
+  else if (group === "color") keys = COLOR_ORDER.filter(k => map.has(k));
+  else                        keys = [...map.keys()].sort((a, b) => cmcRank(a) - cmcRank(b));
+  return keys.map(k => ({
+    key: k,
+    label: group === "type" ? TYPE_LABEL[k] : k.toUpperCase(),
+    items: sortItems(map.get(k), sort, cardOf),
+  }));
+}
+
+const GROUP_OPTIONS = [
+  { value: "type",  label: "type" },
+  { value: "cmc",   label: "mv" },
+  { value: "color", label: "color" },
+  { value: "none",  label: "none" },
+];
+const DECK_SORT_OPTIONS = [
+  { value: "name",  label: "a–z" },
+  { value: "cmc",   label: "mv" },
+  { value: "color", label: "color" },
+];
+
+// Sort/group preference persists per deck (keyed by legend id, the stable
+// per-deck id — one deck per legend). Best-effort localStorage.
+const VIEW_PREF_PREFIX = "magikdex-decklist-view:";
+function loadViewPref(deckKey) {
+  if (!deckKey) return null;
+  try { return JSON.parse(localStorage.getItem(VIEW_PREF_PREFIX + deckKey) ?? "null"); }
+  catch { return null; }
+}
+
 export default function ReviewScreen({
   decklist, maybeboard,
   onConfirm, saving, error,
@@ -87,6 +213,7 @@ export default function ReviewScreen({
   onAddMore,
   onDeckSearch,
   stackCount = 0,
+  deckKey = null,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -104,6 +231,17 @@ export default function ReviewScreen({
   // the list to that category's cards; tapping it again clears. One category
   // at a time (the band is a composition readout, not a query builder).
   const [wrecFilter, setWrecFilter] = useState(null);
+  // Sort/group view controls (Change 6). Default: group by type, sort a–z
+  // (Moxfield-familiar). Lazily seeded from the per-deck saved pref, then
+  // persisted on change. Orthogonal to the WREC band — this organizes the list,
+  // the band reads composition.
+  const [groupBy, setGroupBy] = useState(() => loadViewPref(deckKey)?.groupBy ?? "type");
+  const [sort, setSort]       = useState(() => loadViewPref(deckKey)?.sort ?? "name");
+  useEffect(() => {
+    if (!deckKey) return;
+    try { localStorage.setItem(VIEW_PREF_PREFIX + deckKey, JSON.stringify({ groupBy, sort })); }
+    catch { /* view pref is best-effort */ }
+  }, [deckKey, groupBy, sort]);
   // "add more" (gap-filling stack) — pending/error state is local so the
   // button can report "no cards" inline without a global error channel.
   const [addingMore, setAddingMore] = useState(false);
@@ -264,6 +402,10 @@ export default function ReviewScreen({
       ? allItems.filter(({ name }) =>
           (cardTags?.[`${sectionKey}:${name}`]?.tags ?? []).includes(wrecFilter))
       : allItems;
+    const total = items.reduce((n, c) => n + c.quantity, 0);
+    // Change 6 — split the section into ordered groups per the view controls.
+    // The row body below is unchanged; it just iterates a group's items now.
+    const groups = buildDeckGroups(items, groupBy, sort, (n) => cardData[n]);
     return (
       <div key={sectionKey}>
         <div style={{
@@ -274,13 +416,25 @@ export default function ReviewScreen({
           paddingBottom: 6,
           marginBottom: 6,
         }}>
-          {label} · {items.reduce((n, c) => n + c.quantity, 0)}
+          {label} · {total}
           {wrecFilter && ` · ${LABEL_BY_TAG[wrecFilter]}`}
         </div>
         {items.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>—</div>
         ) : (
-          items.map(({ name, quantity }) => {
+          groups.map(g => (
+            <div key={g.key}>
+              {g.label && (
+                <div style={{
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 10, letterSpacing: "0.12em",
+                  color: "var(--muted)",
+                  padding: "10px 0 2px",
+                }}>
+                  {g.label} · {g.items.reduce((n, c) => n + c.quantity, 0)}
+                </div>
+              )}
+              {g.items.map(({ name, quantity }) => {
             const key = `${sectionKey}:${name}`;
             const tags = cardTags?.[key]?.tags ?? [];
             // Auto-suggested subset (deck_card_tags.source 'auto') — rendered
@@ -475,7 +629,9 @@ export default function ReviewScreen({
                 )}
               </div>
             );
-          })
+          })}
+            </div>
+          ))
         )}
       </div>
     );
@@ -699,6 +855,62 @@ export default function ReviewScreen({
             color: "var(--text)",
           }}>
             {live ? "DECK" : "REVIEW"} · {totalCards} CARD{totalCards !== 1 ? "S" : ""}
+          </div>
+        )}
+
+        {/* Change 6 — sort/group controls. Compact mono chips, deliberately
+            separate from the WREC composition band (which reads role coverage,
+            orthogonal to how the list is organized). Only meaningful once the
+            deck holds cards. */}
+        {live && totalCards > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+            <span style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 10, letterSpacing: "0.1em", color: "var(--muted)", marginRight: 2,
+            }}>GROUP</span>
+            {GROUP_OPTIONS.map(o => {
+              const active = groupBy === o.value;
+              return (
+                <button
+                  key={o.value}
+                  onClick={() => setGroupBy(o.value)}
+                  style={{
+                    minHeight: 44, padding: "0 10px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent",
+                    border: `1px solid ${active ? "var(--primary)" : "var(--bevel-dark)"}`,
+                    color: active ? "var(--primary)" : "var(--muted)",
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    borderRadius: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >{o.label}</button>
+              );
+            })}
+            <span style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 10, letterSpacing: "0.1em", color: "var(--muted)",
+              marginLeft: 6, marginRight: 2,
+            }}>SORT</span>
+            {DECK_SORT_OPTIONS.map(o => {
+              const active = sort === o.value;
+              return (
+                <button
+                  key={o.value}
+                  onClick={() => setSort(o.value)}
+                  style={{
+                    minHeight: 44, padding: "0 10px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent",
+                    border: `1px solid ${active ? "var(--primary)" : "var(--bevel-dark)"}`,
+                    color: active ? "var(--primary)" : "var(--muted)",
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    borderRadius: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >{o.label}</button>
+              );
+            })}
           </div>
         )}
 

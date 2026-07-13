@@ -1348,6 +1348,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onAddMore={session ? handleAddMore : undefined}
             onDeckSearch={session ? runGlobalSearch : undefined}
             stackCount={swipeCards.length}
+            deckKey={session?.legend?.id ?? null}
           />
         )}
 

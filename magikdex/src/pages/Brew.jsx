@@ -96,6 +96,20 @@ function withColorIdentity(q, colorIdentity) {
   return `${q} legal:commander ci<=${ci}`.trim();
 }
 
+// The decklist search bar (Change 1) is a STACK GENERATOR over all of Scryfall,
+// not the in-stack narrow. Distinguish a bare name search from raw Scryfall
+// syntax: any operator (: = < > or a quote) means the user is writing syntax,
+// so pass it through untouched. Bare text is a name search, gated to 3+ chars so
+// a stray letter doesn't fire a 20k-card query. Scryfall already treats bare
+// words as name matches, so no name: wrapping is needed — and withColorIdentity
+// ANDs legal:commander + the deck's identity on top of either form, so an
+// illegal card can never surface no matter what the user types.
+const SCRYFALL_SYNTAX = /[:=<>"]/;
+function nameOrSyntax(input) {
+  const isSyntax = SCRYFALL_SYNTAX.test(input);
+  return { isSyntax, tooShort: !isSyntax && input.length < 3 };
+}
+
 // A query is "default seed" when the user typed nothing — it's either empty or
 // just the exclude-lands marker the seed itself added. Only these queries are
 // eligible for the legend-relevant RPC stack; anything typed goes to live
@@ -642,6 +656,12 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // state on mount. The deck is NOT here — it persists via deck_cards writes.
   useEffect(() => {
     if (!session?.legend?.id || swipeCards.length === 0) return;
+    // Search stacks are EPHEMERAL (Ben, Change 1): a typed-search stack is never
+    // persisted as the resume seed, so reopening the legend always returns to the
+    // default EDHREC stack (or the last default/wrec stack saved before the
+    // search) rather than resuming a one-off search — the default stay "home".
+    // Default seeds ("" / "-t:land") and wrec: gap-fill markers still persist.
+    if (!isDefaultSeedQuery(query) && !wrecQueryCategory(query)) return;
     saveBrewSession(session.legend.id, {
       query, narrow: stackNarrow, order: swipeOrder, dir: swipeDir, index: swipeIndex,
     });
@@ -942,6 +962,54 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     }
   }
 
+  // Change 1 — the decklist search bar summons a CUSTOM swipe stack from all of
+  // Scryfall (the EDHREC list is only the default stack). Results are never a
+  // list: they become the swipe stack itself, routed into the same SwipeScreen
+  // used everywhere else. The typed query becomes the stack identity (`query`),
+  // so session resume rebuilds it through the existing typed-search branch and
+  // the origin subline reads `search: …`. baseStackRef is set to the results so
+  // the in-swipe filter (Change 3) narrows THIS stack, not the old one. Cards
+  // already in the deck (or decided this session) are dropped by buildSwipeCards,
+  // so the user never swipes past what they already have. Returns a runSearch-
+  // shaped result so the caller can surface the short/empty/syntax cases as one
+  // mono line. This is also the alternate-stack-source primitive hand mode reuses.
+  async function runGlobalSearch(rawInput) {
+    const input = (rawInput ?? "").trim();
+    if (!input) return { ok: false, kind: "empty", message: "type a card name or Scryfall syntax" };
+    if (nameOrSyntax(input).tooShort) {
+      return { ok: false, kind: "short", message: "type at least 3 letters to search by name" };
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const finalQuery = withColorIdentity(input, legendColorIdentity);
+      const { cards } = await fetchFirstPageForSwipe(finalQuery, { order: swipeOrder, dir: swipeDir });
+      baseStackRef.current = cards;
+      const filtered = buildSwipeCards(cards, "", swipeOrder, swipeDir);
+      if (!filtered.length) {
+        // An empty legal-card search should be impossible by design, so a dry
+        // result almost always means "every match is already in the deck".
+        const message = cards.length
+          ? "every card matching that is already in your deck"
+          : "no cards match that search";
+        return { ok: false, kind: "empty", message };
+      }
+      setStackNarrow("");
+      setQuery(input);
+      setSwipeCards(filtered);
+      setSwipeIndex(0);
+      setReviewOrigin("swipe");
+      setBrewView("swipe");
+      return { ok: true };
+    } catch (err) {
+      // Surface Scryfall's own syntax reason; otherwise a generic one-liner.
+      const kind = err.code === "invalid_query" ? "invalid" : "error";
+      return { ok: false, kind, message: err.message };
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // The in-swipe search box for a legend session NARROWS the current relevance/
   // wrec stack client-side instead of running a generic Scryfall search — the
   // EDHREC ordering is preserved and only cards the stack already holds are ever
@@ -1147,6 +1215,15 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     else handleBack();
   }
 
+  // The swipe header names the stack's origin when it isn't the default. Derived
+  // from `query` (the stack identity), so it survives resume with no extra state:
+  // the default seed ("" / "-t:land") and wrec: gap-fill markers stay anonymous
+  // (the commander anchor already identifies those); anything else is a Change-1
+  // search stack, labelled `search: {query}`.
+  const stackOrigin = session && query && !isDefaultSeedQuery(query) && !wrecQueryCategory(query)
+    ? { type: "search", query }
+    : null;
+
   if (brewView !== "shell") {
     return (
       <div style={{
@@ -1228,6 +1305,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onSortChange={handleSortChange}
             onCardCommit={session ? commitCard : undefined}
             reconnecting={reconnecting}
+            stackOrigin={stackOrigin}
           />
         )}
 
@@ -1248,6 +1326,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onBrew={session ? goToSwipe : undefined}
             onDeleteDeck={session ? handleDeleteDeck : undefined}
             onAddMore={session ? handleAddMore : undefined}
+            onDeckSearch={session ? runGlobalSearch : undefined}
           />
         )}
 

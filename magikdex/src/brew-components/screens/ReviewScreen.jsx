@@ -85,6 +85,7 @@ export default function ReviewScreen({
   onDeleteDeck,
   onMoveCard,
   onAddMore,
+  onDeckSearch,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -111,6 +112,25 @@ export default function ReviewScreen({
   // header carries no art — Ben: name only). undefined = lookup failed.
   const [showCommander, setShowCommander] = useState(false);
   const [commanderFull, setCommanderFull] = useState(null);
+  // Change 1 — the "add cards" search bar. Submitting hands the query to the
+  // parent, which builds a search-derived swipe stack and switches to the swipe
+  // view (unmounting this screen); only a rejected query (too short / everything
+  // already in-deck / bad syntax) returns control here to show the one-line why.
+  const [cardSearch, setCardSearch] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchMsg, setSearchMsg] = useState(null);
+
+  async function handleCardSearch() {
+    const q = cardSearch.trim();
+    if (!q || searchBusy) return;
+    setSearchBusy(true);
+    setSearchMsg(null);
+    const res = await onDeckSearch(q);
+    if (res && !res.ok) {
+      setSearchMsg(res.message);
+      setSearchBusy(false);
+    }
+  }
 
   async function openCommander() {
     setShowCommander(true);
@@ -631,6 +651,43 @@ export default function ReviewScreen({
         flexDirection: "column",
         gap: 20,
       }}>
+
+        {/* Change 1 — add cards from all of Scryfall. Submitting builds a custom
+            swipe stack (commander-legal, in the deck's color identity, minus
+            what's already in the deck) and drops into the same swipe screen —
+            it is never a results list. Sits below the frozen counter band and
+            above the DECKLIST header; clearing it before submit is a no-op. */}
+        {live && onDeckSearch && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <input
+              type="text"
+              value={cardSearch}
+              onChange={e => setCardSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleCardSearch(); }}
+              placeholder="add cards · name or scryfall syntax"
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              readOnly={searchBusy}
+              style={{
+                width: "100%", boxSizing: "border-box", minHeight: 44,
+                background: "var(--color-bg)",
+                color: "var(--text)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 16,
+                border: "1px solid var(--bevel-dark)",
+                padding: "0 12px", borderRadius: 0, outline: "none",
+                opacity: searchBusy ? 0.5 : 1,
+              }}
+            />
+            {searchMsg && (
+              <div style={{
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, color: "var(--muted)", lineHeight: 1.5,
+              }}>
+                {searchMsg}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Text header only when there's no commander anchor (save flow). */}
         {!showAnchor && (

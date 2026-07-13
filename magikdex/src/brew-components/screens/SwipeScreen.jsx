@@ -39,6 +39,7 @@ export default function SwipeScreen({
   swipeOrder = "name", swipeDir = "desc", onSortChange,
   onCardCommit, reconnecting,
   onDoubleTag,
+  stackOrigin,
 }) {
   // Cards already sorted into a pile/decklist/maybeboard leave the carousel
   // entirely — decided cards never reappear when browsing back.
@@ -568,12 +569,15 @@ export default function SwipeScreen({
               fontSize: 10, letterSpacing: "0.1em",
               color: "rgba(255,255,255,0.3)",
               textTransform: "uppercase",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {reconnecting
                 ? "reconnecting…"
                 : done
                   ? `${pile.length} kept`
-                  : `${effectiveCards.length - idx} in stack`}
+                  : stackOrigin?.type === "search"
+                    ? `search: ${stackOrigin.query} · ${effectiveCards.length - idx} in stack`
+                    : `${effectiveCards.length - idx} in stack`}
             </span>
           </span>
         </button>

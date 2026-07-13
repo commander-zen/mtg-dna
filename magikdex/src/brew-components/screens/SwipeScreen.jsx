@@ -40,6 +40,7 @@ export default function SwipeScreen({
   onCardCommit, reconnecting,
   onDoubleTag,
   stackOrigin,
+  stackNarrow = "", totalStackCount = 0, onClearFilter, onSearchAll,
 }) {
   // Cards already sorted into a pile/decklist/maybeboard leave the carousel
   // entirely — decided cards never reappear when browsing back.
@@ -334,6 +335,25 @@ export default function SwipeScreen({
   // cache-first on first open (null = loading, undefined = lookup failed).
   const [showCommander, setShowCommander] = useState(false);
   const [commanderFull, setCommanderFull] = useState(null);
+
+  // Zero-results escape hatch (Change 3): when a stack filter matches nothing,
+  // "search all cards" re-runs the same query through the global-search path and
+  // swaps in a bigger, search-derived stack — all without leaving the swipe. On
+  // success the parent hands new `cards` (and clears the filter), so `done`
+  // clears on its own; only a failed search returns control here for the message.
+  const [escapeBusy, setEscapeBusy] = useState(false);
+  const [escapeMsg, setEscapeMsg]   = useState(null);
+  async function handleSearchAll() {
+    if (escapeBusy) return;
+    setEscapeBusy(true);
+    setEscapeMsg(null);
+    const res = await onSearchAll?.(stackNarrow);
+    if (res && !res.ok) {
+      setEscapeMsg(res.message);
+      setEscapeBusy(false);
+    }
+  }
+
   async function openCommander() {
     if (!commanderName) return;
     setShowCommander(true);
@@ -575,9 +595,11 @@ export default function SwipeScreen({
                 ? "reconnecting…"
                 : done
                   ? `${pile.length} kept`
-                  : stackOrigin?.type === "search"
-                    ? `search: ${stackOrigin.query} · ${effectiveCards.length - idx} in stack`
-                    : `${effectiveCards.length - idx} in stack`}
+                  : stackNarrow
+                    ? `${effectiveCards.length} of ${totalStackCount} in stack`
+                    : stackOrigin?.type === "search"
+                      ? `search: ${stackOrigin.query} · ${effectiveCards.length - idx} in stack`
+                      : `${effectiveCards.length - idx} in stack`}
             </span>
           </span>
         </button>
@@ -634,6 +656,45 @@ export default function SwipeScreen({
         </button>
       </div>
 
+      {/* Persistent filter chip (Change 3) — gold-bordered, names the active
+          in-stack filter and clears it via ✕. Sits just under the header row,
+          in the gap above the card, parallel to the card's own corner plates.
+          The matching/total count lives in the header subline above. */}
+      {stackNarrow && (
+        <div style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 48px)",
+          left: 8, zIndex: 4,
+          maxWidth: "calc(100% - 16px)",
+          minHeight: 44,
+          display: "flex", alignItems: "center", gap: 4,
+          background: "rgba(0,0,0,0.55)",
+          border: "1px solid var(--primary)",
+          paddingLeft: 10,
+        }}>
+          <span style={{
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 10, letterSpacing: "0.08em",
+            color: "var(--primary)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            filtering: {stackNarrow}
+          </span>
+          <button
+            onClick={onClearFilter}
+            aria-label="Clear filter"
+            style={{
+              minWidth: 44, minHeight: 44, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "transparent", border: "none", padding: 0,
+              color: "var(--primary)",
+              fontFamily: "'Noto Sans', sans-serif", fontSize: 16, lineHeight: 1,
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}
+          >×</button>
+        </div>
+      )}
+
       {/* Sort dropdown */}
       {sortMenuOpen && (
         <div style={{
@@ -674,7 +735,50 @@ export default function SwipeScreen({
       )}
 
       {/* ── Done state ── */}
-      {done && (
+      {/* A filter that emptied the stack is NOT "you've seen everything" — it's a
+          dead end, so it gets its own escape hatch (Change 3): re-run the same
+          query across all cards and swap in the bigger stack, staying on the
+          swipe. Clearing the filter (header chip ✕) is the other way out. */}
+      {done && stackNarrow && (
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 16, padding: "0 32px", textAlign: "center",
+        }}>
+          <div style={{
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 13, letterSpacing: "0.06em", lineHeight: 1.5,
+            color: "var(--color-text-secondary)",
+          }}>nothing in this stack matches</div>
+          <button
+            onClick={handleSearchAll}
+            disabled={escapeBusy}
+            style={{
+              minHeight: 44, padding: "0 24px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--primary)",
+              background: "transparent",
+              color: "var(--primary)",
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 13, letterSpacing: "0.1em",
+              borderRadius: 0,
+              cursor: escapeBusy ? "default" : "pointer",
+              opacity: escapeBusy ? 0.6 : 1,
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >{escapeBusy ? "searching…" : "search all cards →"}</button>
+          {escapeMsg && (
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 12, lineHeight: 1.5,
+              color: "var(--color-text-secondary)",
+            }}>{escapeMsg}</div>
+          )}
+        </div>
+      )}
+
+      {done && !stackNarrow && (
         <div style={{
           position: "absolute", inset: 0,
           display: "flex", flexDirection: "column",
@@ -724,20 +828,29 @@ export default function SwipeScreen({
         display: "flex", alignItems: "center", gap: 8,
         padding: "0 8px",
       }}>
-        {/* SEARCH — bottom-left, ≥44px. Navigates to the full SearchScreen. */}
+        {/* FILTER — bottom-left, ≥44px. Opens the narrow panel (SearchScreen in
+            narrow mode). Funnel + label, not a magnifying glass: this narrows the
+            stack you're holding, it doesn't search all cards — the old glass
+            implied a global search that couldn't deliver, which was the dead end
+            this whole change set removes. */}
         {!done ? (
           <button
             onClick={onGoToSearch}
-            aria-label="Search"
+            aria-label="Filter"
             style={{
-              width: 44, height: 44, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
+              minHeight: 44, flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 5,
+              background: "rgba(0,0,0,0.4)", border: "none",
+              padding: "0 10px",
               color: "rgba(255,255,255,0.75)",
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}
           >
-            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>filter_alt</span>
+            <span style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 11, letterSpacing: "0.08em",
+            }}>filter</span>
           </button>
         ) : (
           <div style={{ width: 44, flexShrink: 0 }} />

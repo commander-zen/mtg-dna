@@ -74,7 +74,7 @@ function chipExpression(chip) {
   return `(${chip.tags.map(t => `otag:${t}`).join(" or ")})`;
 }
 
-export default function SearchScreen({ onSearch, loading, error, initialQuery, narrowStack = false }) {
+export default function SearchScreen({ onSearch, loading, error, initialQuery, narrowStack = false, stackCount = 0 }) {
   const initial = splitLandFilter(initialQuery);
   const [brewInput,     setBrewInput]     = useState(initial.clean);
   const [includeLands,  setIncludeLands]  = useState(initial.includeLands);
@@ -192,7 +192,7 @@ export default function SearchScreen({ onSearch, loading, error, initialQuery, n
             lineHeight: 1.5,
             color: "var(--color-text-secondary)",
           }}>
-            Filter this stack — relevance order is kept.{" "}
+            Narrows the current stack of {stackCount} — relevance order is kept.{" "}
             <span style={{ fontFamily: "'Noto Sans Mono', monospace" }}>-t:eldrazi</span>,{" "}
             <span style={{ fontFamily: "'Noto Sans Mono', monospace" }}>cmc&lt;=4</span>, or a word.
           </div>

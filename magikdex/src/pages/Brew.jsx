@@ -1018,18 +1018,25 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // error/empty handling is unchanged.
   function applyStackNarrow(terms) {
     const trimmed = (terms ?? "").trim();
+    // Even a ZERO-MATCH filter lands on the swipe screen (Change 3): SwipeScreen
+    // shows the "nothing in this stack matches" escape state with a "search all
+    // cards" hatch, so the dead end becomes a bigger stack without ever leaving
+    // the swipe. Clearing the filter (empty terms) rebuilds the full stack.
     const next = buildSwipeCards(baseStackRef.current, trimmed, swipeOrder, swipeDir);
-    if (!next.length) {
-      const message = "No cards in this stack match that filter.";
-      setError(message);
-      return { ok: false, kind: "empty", message };
-    }
     setError(null);
     setStackNarrow(trimmed);
     setSwipeCards(next);
     setSwipeIndex(0);
     setBrewView("swipe");
     return { ok: true };
+  }
+
+  // Clear the in-swipe filter from the SwipeScreen chip's ✕ — rebuild the full
+  // (un-narrowed) stack in place, staying on the swipe. Never destructive.
+  function clearStackNarrow() {
+    setStackNarrow("");
+    setSwipeCards(buildSwipeCards(baseStackRef.current, "", swipeOrder, swipeDir));
+    setSwipeIndex(0);
   }
 
   function handleSortChange(order, dir) {
@@ -1224,6 +1231,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     ? { type: "search", query }
     : null;
 
+  // The size of the current stack BEFORE the in-swipe filter narrows it — feeds
+  // the filter chip's `{matching} of {total}` count and the narrow panel's
+  // "narrows the current stack of {N}" copy. Un-narrowed and deck-excluded, so
+  // it's the honest "how big is the stack I'm filtering" number.
+  const totalStackCount = session
+    ? buildSwipeCards(baseStackRef.current, "", swipeOrder, swipeDir).length
+    : 0;
+
   if (brewView !== "shell") {
     return (
       <div style={{
@@ -1279,6 +1294,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             // into narrow mode (no otag chips: they can't be evaluated locally).
             initialQuery={session ? stackNarrow : query}
             narrowStack={!!session}
+            stackCount={totalStackCount}
           />
         )}
 
@@ -1306,6 +1322,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onCardCommit={session ? commitCard : undefined}
             reconnecting={reconnecting}
             stackOrigin={stackOrigin}
+            stackNarrow={session ? stackNarrow : ""}
+            totalStackCount={totalStackCount}
+            onClearFilter={session ? clearStackNarrow : undefined}
+            onSearchAll={session ? runGlobalSearch : undefined}
           />
         )}
 

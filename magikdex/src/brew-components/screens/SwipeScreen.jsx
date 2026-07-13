@@ -34,7 +34,7 @@ export default function SwipeScreen({
   cards, pile, onPileChange,
   maybeboard, onMaybeboardChange,
   decklist = [], onDecklistChange,
-  onGoToPile, onExit, onGoToSearch, onSearchMore, commanderCard,
+  onGoToPile, onReview, onSearchMore, commanderCard,
   initialIndex, onIndexChange,
   swipeOrder = "name", swipeDir = "desc", onSortChange,
   onCardCommit, reconnecting,
@@ -907,9 +907,13 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Bottom controls — Ben's device-pass placement: SEARCH bottom-left,
-            HOME bottom-right, gesture hint between. Home exits the session
-            (always reachable, even in the done state). ── */}
+      {/* ── Bottom controls (Change 11) — BACK bottom-left (→ the deck list, the
+            swipe's parent in the ladder), REVIEW bottom-right (enter the
+            flip-your-deck mode); gesture hint between. Home is gone: the
+            back-ladder (swipe → deck list → Box) replaces it. In review/flip
+            mode the right slot is empty (you're already reviewing). The old
+            filter button is gone too — filtering is now the editable query chip
+            (Change 10). ── */}
       <div style={{
         position: "absolute",
         left: 0, right: 0,
@@ -918,33 +922,25 @@ export default function SwipeScreen({
         display: "flex", alignItems: "center", gap: 8,
         padding: "0 8px",
       }}>
-        {/* FILTER — bottom-left, ≥44px. Opens the narrow panel (SearchScreen in
-            narrow mode). Funnel + label, not a magnifying glass: this narrows the
-            stack you're holding, it doesn't search all cards — the old glass
-            implied a global search that couldn't deliver, which was the dead end
-            this whole change set removes. */}
-        {!done && !handMode ? (
-          <button
-            onClick={onGoToSearch}
-            aria-label="Filter"
-            style={{
-              minHeight: 44, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-              background: "rgba(0,0,0,0.4)", border: "none",
-              padding: "0 10px",
-              color: "rgba(255,255,255,0.75)",
-              cursor: "pointer", WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>filter_alt</span>
-            <span style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 11, letterSpacing: "0.08em",
-            }}>filter</span>
-          </button>
-        ) : (
-          <div style={{ width: 44, flexShrink: 0 }} />
-        )}
+        {/* BACK — bottom-left, ≥44px, to the deck list */}
+        <button
+          onClick={onGoToPile}
+          aria-label="Back to deck list"
+          style={{
+            minHeight: 44, flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(0,0,0,0.4)", border: "none",
+            padding: "0 10px",
+            color: "rgba(255,255,255,0.75)",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
+          <span style={{
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11, letterSpacing: "0.08em",
+          }}>back</span>
+        </button>
 
         {/* Middle — gesture hint */}
         <div style={{
@@ -960,20 +956,30 @@ export default function SwipeScreen({
           {!done && (handMode ? "← flip →  ↑ cut  ↓ maybe" : "← browse →  ↑ mainboard  ↓ maybe")}
         </div>
 
-        {/* HOME — bottom-right, ≥44px, exits the session to the Box */}
-        <button
-          onClick={onExit}
-          aria-label="Home"
-          style={{
-            width: 44, height: 44, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(0,0,0,0.4)", border: "none", padding: 0,
-            color: "rgba(255,255,255,0.75)",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>home</span>
-        </button>
+        {/* REVIEW — bottom-right, ≥44px, enters flip-your-deck mode. Hidden in
+            review/flip mode itself (you're already there → empty spacer). */}
+        {!handMode ? (
+          <button
+            onClick={onReview}
+            aria-label="Review — flip through your deck"
+            style={{
+              minHeight: 44, flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 5,
+              background: "rgba(0,0,0,0.4)", border: "none",
+              padding: "0 10px",
+              color: "rgba(255,255,255,0.75)",
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <span style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 11, letterSpacing: "0.08em",
+            }}>review</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>back_hand</span>
+          </button>
+        ) : (
+          <div style={{ width: 44, flexShrink: 0 }} />
+        )}
       </div>
 
       {/* ── Commander card overlay — tap the commander bar to open, tap

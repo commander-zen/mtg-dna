@@ -1205,6 +1205,29 @@ export default function ReviewScreen({
             justifyContent: "space-between",
             padding: "0 12px",
           }}>
+            {/* Change 11 — back bottom-LEFT (exits to the Box, the decklist's
+                parent in the ladder); the flip-deck entry sits bottom-RIGHT;
+                home is removed (the back-ladder replaces it — two taps to the
+                Box is intended). Brew stays in the middle for now; Change 10
+                folds it into the search bar. */}
+            <button
+              onClick={onHome}
+              aria-label="Back"
+              style={{
+                minHeight: 44,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "transparent", border: "none",
+                color: "var(--muted)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.08em",
+                padding: "0 10px",
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
+              back
+            </button>
             <button
               onClick={onBrew}
               aria-label="Brew"
@@ -1225,9 +1248,8 @@ export default function ReviewScreen({
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>style</span>
               brew
             </button>
-            {/* Change 4 — hand mode entry. Middle of the bottom nav (prime thumb
-                zone), between brew and home. Only when the deck has cards to
-                flip through. */}
+            {/* Flip-deck entry (renamed hand → review in Change 15), bottom-right.
+                Only when the deck has cards to flip through. */}
             {onHand && totalCards > 0 && (
               <button
                 onClick={() => onHand(
@@ -1253,24 +1275,6 @@ export default function ReviewScreen({
                 hand
               </button>
             )}
-            <button
-              onClick={onHome}
-              aria-label="Home"
-              style={{
-                minHeight: 44,
-                display: "flex", alignItems: "center", gap: 6,
-                background: "transparent", border: "none",
-                color: "var(--muted)",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.08em",
-                padding: "0 10px",
-                cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              home
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>home</span>
-            </button>
           </div>
         </div>
       )}

@@ -318,10 +318,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [existingCardRows, setExistingCardRows] = useState([]);
   const [legendColorIdentity, setLegendColorIdentity] = useState(null);
 
-  // Where "back" from review should land — the legend's deck row is review's
-  // canonical parent; entering review via the swipe tally keeps swipe-back.
-  const [reviewOrigin, setReviewOrigin] = useState("swipe");
-
   // WREC tags per deck card, keyed `${section}:${card_name}` →
   // { id: deck_card_id, tags: string[], quantity }. Loaded when review opens;
   // toggling is an immediate write (a tag is a write, no save step).
@@ -487,7 +483,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       // the background (excluding everything already in the deck) so review's
       // back arrow can drop straight into "continue brewing".
       if (session.startView === "review") {
-        setReviewOrigin("legend");
         setBrewView("review");
         await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted, { setView: false });
       } else {
@@ -548,7 +543,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSwipeDir("asc");
     setSwipeCards(filtered);
     setSwipeIndex(0);
-    setReviewOrigin("swipe");
     setBrewView("swipe");
   }
 
@@ -980,7 +974,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSaveError(null);
     setAttachDeckId(null);
     setExistingCardRows([]);
-    setReviewOrigin("swipe");
   }
 
   async function runSearch(q, order = swipeOrder, dir = swipeDir, label) {
@@ -1050,7 +1043,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       setQuery(input);
       setSwipeCards(filtered);
       setSwipeIndex(0);
-      setReviewOrigin("swipe");
       setBrewView("swipe");
       return { ok: true };
     } catch (err) {
@@ -1192,9 +1184,12 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       brewView === "shell"  ? null
     : brewView === "modes"  ? "shell"
     : brewView === "search" ? (session ? "swipe" : "modes")
-    : brewView === "swipe"  ? (session ? null : (isLokiSession ? "modes" : "search"))
+    // Change 11 — the ladder is swipe → deck list → Box: swipe/hand back to the
+    // deck list, the deck list back to the Box (always, regardless of how it was
+    // reached). Non-session (Loki/legacy) swipe keeps its old target.
+    : brewView === "swipe"  ? (session ? "review" : (isLokiSession ? "modes" : "search"))
     : brewView === "hand"   ? "review"
-    : brewView === "review" ? (reviewOrigin === "legend" ? null : "swipe")
+    : brewView === "review" ? (session ? null : "swipe")
     : "swipe";
 
   function handleBack() {
@@ -1206,12 +1201,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     }
   }
 
-  // Review's explicit bottom-zone controls — always the same two targets
-  // regardless of how review was reached (unlike the chevron/hardware-back
-  // ladder above, which still depends on reviewOrigin). BREW (right) deals
-  // into the session's swipe queue — the same queue the legend-session
-  // effect seeds/resumes, so it's one path whether review was the landing
-  // point or a mid-swipe detour. HOME (left) exits to the Box.
+  // The deck list's bottom-nav targets (Change 11): goToSwipe (BREW, deal the
+  // discovery stack) and goHome (BACK, exit to the Box — the deck list's parent
+  // in the swipe → deck list → Box ladder). Both are single-path regardless of
+  // how the deck list was reached.
   function goToSwipe() {
     setBrewView("swipe");
   }
@@ -1360,10 +1353,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onMaybeboardChange={setMaybeboard}
             decklist={decklist}
             onDecklistChange={setDecklist}
-            onGoToPile={() => { setReviewOrigin("swipe"); setBrewView("review"); }}
-            onExit={goBack}
-            onGoToSearch={() => setBrewView("search")}
-            onSearchMore={() => setBrewView("search")}
+            onGoToPile={() => setBrewView("review")}
+            onReview={session ? () => enterHandMode() : undefined}
+            onSearchMore={() => setBrewView("review")}
             commanderCard={session
               ? { name: session.legend.name, art: session.legend.image_uri }
               : sessionLabel ? { name: sessionLabel } : null}
@@ -1392,8 +1384,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => setBrewView("review")}
-            onExit={() => setBrewView("review")}
-            onSearchMore={() => setBrewView("review")}
             commanderCard={session
               ? { name: session.legend.name, art: session.legend.image_uri }
               : sessionLabel ? { name: sessionLabel } : null}

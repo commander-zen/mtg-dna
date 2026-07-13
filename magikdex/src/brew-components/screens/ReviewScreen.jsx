@@ -86,6 +86,7 @@ export default function ReviewScreen({
   onMoveCard,
   onAddMore,
   onDeckSearch,
+  stackCount = 0,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -701,9 +702,58 @@ export default function ReviewScreen({
           </div>
         )}
 
-        {/* DECKLIST always; MAYBEBOARD only when it holds cards. No pile. */}
-        {renderSection("DECKLIST", groups.decklist, "decklist")}
-        {maybeboard.length > 0 && renderSection("MAYBEBOARD", groups.maybe, "maybe")}
+        {/* Change 2 — first-run empty state teaches instead of showing a lone
+            "—" (which read as broken). Only when the whole deck is empty in a
+            live session; a filtered-empty section still uses the "—" in
+            renderSection (there it means "no ramp here", not "nothing yet"). The
+            CTA fires the same onBrew as the bottom-nav brew button. */}
+        {live && totalCards === 0 ? (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            textAlign: "center", gap: 14, padding: "32px 12px 24px",
+          }}>
+            {stackCount > 0 && (
+              <div style={{
+                fontFamily: "'Zilla Slab', serif",
+                fontSize: 22, lineHeight: 1.3,
+                color: "var(--text)",
+              }}>
+                {stackCount} cards are shuffled and waiting
+              </div>
+            )}
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 12, lineHeight: 1.5,
+              color: "var(--muted)",
+            }}>
+              swipe to keep or cut, or add exact cards above
+            </div>
+            <button
+              onClick={onBrew}
+              style={{
+                minHeight: 44, marginTop: 4,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "0 24px",
+                background: "transparent",
+                border: "1px solid var(--primary)",
+                color: "var(--primary)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 13, letterSpacing: "0.1em",
+                borderRadius: 0,
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              start brewing →
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* DECKLIST always; MAYBEBOARD only when it holds cards. No pile. */}
+            {renderSection("DECKLIST", groups.decklist, "decklist")}
+            {maybeboard.length > 0 && renderSection("MAYBEBOARD", groups.maybe, "maybe")}
+          </>
+        )}
 
         {/* Gap-filling: a filtered category view ends in "add more" — deal a
             swipe stack of that category's tag pool in the commander's colors
@@ -899,7 +949,9 @@ export default function ReviewScreen({
                 minHeight: 44,
                 display: "flex", alignItems: "center", gap: 6,
                 background: "transparent", border: "none",
-                color: "var(--text)",
+                // Gold while the deck is empty — reinforces the empty-state CTA
+                // that brewing is the next move; reverts to default once cards exist.
+                color: totalCards === 0 ? "var(--primary)" : "var(--text)",
                 fontFamily: "'Noto Sans Mono', monospace",
                 fontSize: 12, letterSpacing: "0.08em",
                 padding: "0 10px",

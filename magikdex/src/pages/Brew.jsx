@@ -1327,6 +1327,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onDeleteDeck={session ? handleDeleteDeck : undefined}
             onAddMore={session ? handleAddMore : undefined}
             onDeckSearch={session ? runGlobalSearch : undefined}
+            stackCount={swipeCards.length}
           />
         )}
 

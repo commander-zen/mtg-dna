@@ -35,10 +35,17 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
     });
   }
 
-  // Tapping a tray slot swaps the detail pane in place (no push) and pins
-  // that legend as last-active.
+  // Tap-to-preview, tap-again-to-load (Change 13): the FIRST tap on a legend
+  // swaps the detail pane (preview) and pins last-active; tapping the legend
+  // that's ALREADY selected loads the deck in. Tapping a different slot just
+  // moves the selection. deck is passed null — Brew re-resolves the legend's
+  // deck from the DB on session start (it never trusts a passed deckId).
   function selectLegend(legend) {
     localStorage.setItem(LAST_KEY, String(legend.id));
+    if (activeLegend && legend.id === activeLegend.id) {
+      launchBrew(legend, null, { startView: "review" });
+      return;
+    }
     setActiveLegend(legend);
   }
 
@@ -110,7 +117,6 @@ export default function Home({ onLaunchBrew, reloadSignal }) {
           <LegendIdentity
             key={`${activeLegend.id}-${reloadSignal}`}
             legend={activeLegend}
-            onBrew={launchBrew}
           />
         ) : (
           <div style={{

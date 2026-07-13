@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCardData, getCardDataBatch, getCardImage, formatManaCost } from "../../lib/scryfall.js";
+import WrecBand, { WREC_CHIPS, LABEL_BY_TAG } from "../../components/WrecBand.jsx";
 
 // Spine screens pad for the notch (top, clearing the back chevron) and the
 // home indicator (bottom) now that no tab bar absorbs the bottom.
@@ -8,16 +9,8 @@ const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 
 const DECK_GATE = 100;
 
-// WREC tag chips, abbreviated to fit mobile. Values mirror the wrec_tag enum;
-// the writes themselves live in Brew.jsx (this stays db-free).
-const WREC_CHIPS = [
-  { tag: "ramp",            label: "RAMP" },
-  { tag: "card-advantage",  label: "CARD-ADV" },
-  { tag: "disruption",      label: "DISRUPTION" },
-  { tag: "mass-disruption", label: "MASS-DIS" },
-  { tag: "plan",            label: "PLAN" },
-];
-const LABEL_BY_TAG = Object.fromEntries(WREC_CHIPS.map(c => [c.tag, c.label]));
+// WREC_CHIPS / LABEL_BY_TAG now live in the shared WrecBand (canonical taxonomy);
+// imported above so the composition band and the per-row tag chips share one list.
 
 // Type-line display rule (mirrors LegendIdentity): every legal commander is a
 // "Legendary Creature — X", so the lead words are dead weight; show the subtypes
@@ -752,51 +745,21 @@ export default function ReviewScreen({
           <div style={{
             maxWidth: 430,
             margin: "0 auto",
-            display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
             paddingLeft: 12, paddingRight: 12,
             paddingTop: showAnchor ? 0 : "calc(env(safe-area-inset-top) + 6px)",
             paddingBottom: 4,
             borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
           }}>
-            {wrecCounts.map(({ tag, label, n }) => {
-              const active = wrecFilter === tag;
-              const dim = n === 0;
-              // Zeros stay dimmed but are STILL tappable (Ben): a zero IS the
-              // gap — tapping it lands on the empty filter + "add more", the
-              // whole point of the gap-fill flow.
-              return (
-                <button
-                  key={tag}
-                  onClick={() => { setWrecFilter(f => (f === tag ? null : tag)); setAddMoreError(null); }}
-                  style={{
-                    minHeight: 44,
-                    display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center", gap: 1,
-                    background: "transparent", border: "none", padding: 0,
-                    borderBottom: `2px solid ${active ? "var(--primary)" : "transparent"}`,
-                    cursor: "pointer",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{
-                    fontFamily: "'Noto Sans Mono', monospace",
-                    fontSize: 13,
-                    color: dim ? "var(--muted)" : active ? "var(--primary)" : "var(--text)",
-                  }}>
-                    {n}
-                  </span>
-                  <span style={{
-                    fontFamily: "'Noto Sans Mono', monospace",
-                    fontSize: 8,
-                    letterSpacing: "0.1em",
-                    color: "var(--muted)",
-                  }}>
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
+            {/* Shared WrecBand — tappable here (filters the list); zeros stay
+                dimmed but tappable (a zero IS the gap → empty filter + "add more"). */}
+            <WrecBand
+              counts={wrecCounts}
+              accent="var(--primary)"
+              muted="var(--muted)"
+              text="var(--text)"
+              activeTag={wrecFilter}
+              onTapTag={(tag) => { setWrecFilter(f => (f === tag ? null : tag)); setAddMoreError(null); }}
+            />
           </div>
         </div>
       )}

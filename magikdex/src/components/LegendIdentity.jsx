@@ -3,6 +3,8 @@ import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase.js";
 import { getCardData, getCardImage, formatManaCost } from "../lib/scryfall.js";
 import { deckTotal, resolveLegendDeck } from "../lib/legendDeck.js";
+import { fetchDeckCardsWithTags } from "../lib/deckTags.js";
+import WrecBand, { WREC_CHIPS } from "./WrecBand.jsx";
 
 const DECK_GATE = 100;
 
@@ -11,10 +13,14 @@ const DECK_GATE = 100;
 // label/value fields; footer = the deck row, the one door into the deck
 // list (brew lives on the deck list's bottom nav now, not here). Fills its
 // pane height with no internal scroll.
-export default function LegendIdentity({ legend, onBrew }) {
+export default function LegendIdentity({ legend }) {
   const { theme, mode } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
   const [decks, setDecks] = useState(legend.decks ?? []);
+  // WREC composition of the selected deck (Change 12) — the footer readout is
+  // now the deck's role coverage, not a redundant name/count line. Fetched per
+  // selected deck; untagged/empty decks honestly read zeros.
+  const [tagRows, setTagRows] = useState([]);
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
   const textColor   = mode === "light" ? theme.ink   : theme.white;
@@ -52,6 +58,20 @@ export default function LegendIdentity({ legend, onBrew }) {
     return () => { cancelled = true; };
   }, [legend.id]);
 
+  // Load the resolved deck's WREC tags whenever the deck changes (select/reload).
+  useEffect(() => {
+    const d = resolveLegendDeck(decks);
+    // Reset when the selected legend has no deck — a plain sync clear, not a
+    // cascade (matches the codebase's other guarded reset effects).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!d?.id) { setTagRows([]); return; }
+    let cancelled = false;
+    fetchDeckCardsWithTags(d.id)
+      .then(rows => { if (!cancelled) setTagRows(rows ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [decks]);
+
   const cardImage = oracleCard ? (getCardImage(oracleCard, "normal") ?? getCardImage(oracleCard, "large")) : null;
   const typeLine = oracleCard?.type_line ?? legend.type_line ?? "";
   // Every legal commander is a legendary creature, so "Legendary Creature — "
@@ -67,6 +87,13 @@ export default function LegendIdentity({ legend, onBrew }) {
   // row below both use this same resolved deck, so they can never point at
   // different rows. See lib/legendDeck.js for the resolution rule.
   const deck = resolveLegendDeck(decks);
+  // Count by card quantity, same as ReviewScreen's band (multi-tag can sum past
+  // the deck size — it's a composition readout, not a partition).
+  const wrecCounts = WREC_CHIPS.map(({ tag, label }) => {
+    let n = 0;
+    for (const r of tagRows) if (r.tags?.includes(tag)) n += (r.quantity ?? 1);
+    return { tag, label, n };
+  });
   // No deck row yet still counts 1: the commander is part of the 100 but is
   // never written to deck_cards (deckTotal's own rule) — without this, the
   // readout flips 0/100 → 1/100 the moment the deck list is first opened.
@@ -170,48 +197,18 @@ export default function LegendIdentity({ legend, onBrew }) {
         </div>
       </div>
 
-      {/* Footer — the deck row, ALWAYS rendered and ALWAYS tappable: it is
-          now the only door into the deck list (which lands startView:"review",
-          Moxfield-style; brew deals from the deck list's bottom nav). With no
-          deck yet the row still opens the (empty) deck list — Brew.jsx creates
-          the deck on session start — so a fresh legend is never stranded.
-          Constant footprint either way: sprite + readout never reflow. */}
-      <div style={{ flexShrink: 0, paddingTop: 8 }}>
-        <div
-          onClick={() => onBrew(legend, deck, { startView: "review" })}
-          style={{
-            display: "flex", alignItems: "center", gap: 10,
-            minHeight: 44,
-            padding: "6px 0",
-            borderTop: `1px solid ${borderColor}`,
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <div style={{
-            flex: 1, minWidth: 0,
-            fontFamily: "'Noto Sans', sans-serif",
-            fontSize: 13,
-            color: deck ? textColor : dimColor,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {deck ? (deck.build_name || legend.name) : "no deck yet"}
-          </div>
-          <div style={{
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 11,
-            color: complete ? ruleColor : dimColor,
-            flexShrink: 0,
-          }}>
-            {complete ? DECK_GATE : `${total}/${DECK_GATE}`}
-          </div>
-          <span
-            className="material-symbols-rounded"
-            style={{ fontSize: 16, color: dimColor, flexShrink: 0 }}
-          >
-            chevron_right
-          </span>
-        </div>
+      {/* Footer — WREC composition readout (Change 12), replacing the old
+          name·count row (which just repeated the sprite + readout above). The
+          deck-row door is gone: loading is now "tap the already-selected
+          legend" (Change 13, handled in Home). Read-only band — no filtering
+          here; zeros are honest for untagged/empty decks. Constant footprint. */}
+      <div style={{ flexShrink: 0, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
+        <WrecBand
+          counts={wrecCounts}
+          accent={ruleColor}
+          muted={dimColor}
+          text={textColor}
+        />
       </div>
     </div>
   );

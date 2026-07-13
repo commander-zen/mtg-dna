@@ -1,6 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCardData, getCardDataBatch, getCardImage, formatManaCost } from "../../lib/scryfall.js";
 import WrecBand, { WREC_CHIPS, LABEL_BY_TAG } from "../../components/WrecBand.jsx";
+
+// Change 14 — how far left a decklist row must be dragged to commit a delete.
+const ROW_DELETE_AT = 88;
+
+// The only ref here is the swipe-gesture start tracker (swipeStart), read solely
+// inside pointer event handlers — the correct place for refs. react-hooks/refs
+// can't see that through the handler closures and flags the JSX call sites, so
+// it's disabled for this file (no other ref usage to mask).
+/* eslint-disable react-hooks/refs */
 
 // Spine screens pad for the notch (top, clearing the back chevron) and the
 // home indicator (bottom) now that no tab bar absorbs the bottom.
@@ -231,6 +240,56 @@ export default function ReviewScreen({
   // the band reads composition.
   const [groupBy, setGroupBy] = useState(() => loadViewPref(deckKey)?.groupBy ?? "type");
   const [sort, setSort]       = useState(() => loadViewPref(deckKey)?.sort ?? "name");
+  // Change 14 — the sort/group options are collapsed by default (progressive
+  // disclosure) so the list isn't buried under a two-row control block; the
+  // summary chip shows current state and expands the full options on tap.
+  const [controlsOpen, setControlsOpen] = useState(false);
+  // Change 14 — swipe-left-to-delete a decklist row (replaces the crowded per-row
+  // ✕). Only one row swipes at a time, so a single {key,dx} pair drives the
+  // transform. Axis-locks against vertical scroll (touchAction pan-y lets the
+  // page scroll; a horizontal lock owns the gesture). A clean tap (no axis lock)
+  // still toggles the WREC chip selector — the row's original job.
+  const [swipeKey, setSwipeKey] = useState(null);
+  const [swipeDx, setSwipeDx]   = useState(0);
+  const swipeStart = useRef(null);
+
+  function rowPointerDown(e, key) {
+    if (!live) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+    swipeStart.current = { x: e.clientX, y: e.clientY, key, axis: null };
+  }
+  function rowPointerMove(e) {
+    const s = swipeStart.current;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (s.axis === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (s.axis === "x") setSwipeKey(s.key);
+      else { swipeStart.current = null; return; } // vertical → let the page scroll
+    }
+    if (s.axis === "x") setSwipeDx(Math.max(-110, Math.min(0, dx)));
+  }
+  function rowPointerUp(e, key, name, sectionKey) {
+    const s = swipeStart.current;
+    swipeStart.current = null;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    if (s.axis === "x") {
+      if (dx < -ROW_DELETE_AT) onRemove(name, sectionKey);
+      setSwipeKey(null);
+      setSwipeDx(0);
+    } else if (s.axis === null && live) {
+      // No drag → a tap → toggle the WREC chip selector (the row's own job).
+      setExpandedKey(k => (k === key ? null : key));
+    }
+  }
+  function rowPointerCancel() {
+    swipeStart.current = null;
+    setSwipeKey(null);
+    setSwipeDx(0);
+  }
   useEffect(() => {
     if (!deckKey) return;
     try { localStorage.setItem(VIEW_PREF_PREFIX + deckKey, JSON.stringify({ groupBy, sort })); }
@@ -443,9 +502,24 @@ export default function ReviewScreen({
             const oracle = card ? oracleOf(card) : "";
             return (
               <div key={name}>
-                {/* Tapping the row (live) opens its WREC chip selector. */}
+                {/* Change 14 — swipe-left to delete (a red delete zone reveals
+                    behind); a clean tap still opens the WREC chip selector. */}
+                <div style={{ position: "relative", overflow: "hidden" }}>
+                  {live && swipeKey === key && (
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      display: "flex", alignItems: "center", justifyContent: "flex-end",
+                      paddingRight: 16,
+                      background: "var(--danger)",
+                    }}>
+                      <span className="material-symbols-rounded" style={{ fontSize: 20, color: "#fff" }}>delete</span>
+                    </div>
+                  )}
                 <div
-                  onClick={live ? () => setExpandedKey(k => (k === key ? null : key)) : undefined}
+                  onPointerDown={live ? (e) => rowPointerDown(e, key) : undefined}
+                  onPointerMove={live ? rowPointerMove : undefined}
+                  onPointerUp={live ? (e) => rowPointerUp(e, key, name, sectionKey) : undefined}
+                  onPointerCancel={live ? rowPointerCancel : undefined}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -455,6 +529,10 @@ export default function ReviewScreen({
                     padding: "5px 0",
                     fontSize: 13,
                     color: "var(--text)",
+                    background: live ? "var(--bg)" : "transparent",
+                    transform: swipeKey === key ? `translateX(${swipeDx}px)` : "translateX(0)",
+                    transition: swipeKey === key ? "none" : "transform 160ms ease",
+                    touchAction: live ? "pan-y" : undefined,
                     cursor: live ? "pointer" : "default",
                     WebkitTapHighlightColor: "transparent",
                   }}
@@ -520,25 +598,8 @@ export default function ReviewScreen({
                     {quantity > 1 && (
                       <span style={{ color: "var(--muted)" }}>×{quantity}</span>
                     )}
-                    {live && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onRemove(name, sectionKey); }}
-                        aria-label={`Remove ${name}`}
-                        style={{
-                          minHeight: 44, minWidth: 44,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "transparent",
-                          border: "none",
-                          padding: 0,
-                          color: "var(--muted)",
-                          fontFamily: "var(--font-system)",
-                          fontSize: 16,
-                          lineHeight: 1,
-                          cursor: "pointer",
-                        }}
-                      >×</button>
-                    )}
                   </div>
+                </div>
                 </div>
 
                 {/* Oracle text — shown only while tagging, so the WREC role can
@@ -827,6 +888,30 @@ export default function ReviewScreen({
             orthogonal to how the list is organized). Only meaningful once the
             deck holds cards. */}
         {live && totalCards > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+            {/* Collapsed summary — current state; tap to reveal/hide the options. */}
+            <button
+              onClick={() => setControlsOpen(o => !o)}
+              style={{
+                minHeight: 44, padding: "0 12px",
+                display: "flex", alignItems: "center", gap: 6,
+                background: "transparent",
+                border: "1px solid var(--bevel-dark)",
+                color: "var(--text)",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 11, letterSpacing: "0.06em",
+                borderRadius: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span style={{ color: "var(--muted)" }}>view</span>
+              {GROUP_OPTIONS.find(o => o.value === groupBy)?.label ?? groupBy}
+              <span style={{ color: "var(--muted)" }}>·</span>
+              {DECK_SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort}
+              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
+                {controlsOpen ? "expand_less" : "expand_more"}
+              </span>
+            </button>
+          {controlsOpen && (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
             <span style={{
               fontFamily: "'Noto Sans Mono', monospace",
@@ -875,6 +960,8 @@ export default function ReviewScreen({
                 >{o.label}</button>
               );
             })}
+          </div>
+          )}
           </div>
         )}
 

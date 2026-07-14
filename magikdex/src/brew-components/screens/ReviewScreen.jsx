@@ -900,7 +900,7 @@ export default function ReviewScreen({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
                 onKeyDown={e => { if (e.key === "Enter") handleCardSearch(); }}
-                placeholder="search or add cards"
+                placeholder="use scryfall syntax"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 readOnly={searchBusy}
                 style={{

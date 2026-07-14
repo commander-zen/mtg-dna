@@ -1,31 +1,29 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { supabase } from "../lib/supabase.js";
-import { getCardData, getCardImage, formatManaCost } from "../lib/scryfall.js";
-import { deckTotal, resolveLegendDeck } from "../lib/legendDeck.js";
+import { getCardData, getCardImage } from "../lib/scryfall.js";
+import { resolveLegendDeck } from "../lib/legendDeck.js";
 import { fetchDeckCardsWithTags } from "../lib/deckTags.js";
-import WrecBand, { WREC_CHIPS } from "./WrecBand.jsx";
-
-const DECK_GATE = 100;
+import { WREC_CHIPS } from "./WrecBand.jsx";
+import { CATEGORY_META } from "../lib/wrec.js";
 
 // The detail pane of the storage-box Home: the selected commander as a
-// device readout. LEFT = the actual card image ("sprite"); RIGHT = stacked
-// label/value fields; footer = the deck row, the one door into the deck
-// list (brew lives on the deck list's bottom nav now, not here). Fills its
+// device readout. LEFT = the actual card image ("sprite"); RIGHT = the deck's
+// WREC composition as bars filling toward Rachel Weeks' recommended targets
+// (Change v4 — replaces the old name/type/mana/deck field stack). Fills its
 // pane height with no internal scroll.
 export default function LegendIdentity({ legend }) {
   const { theme, mode } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
   const [decks, setDecks] = useState(legend.decks ?? []);
-  // WREC composition of the selected deck (Change 12) — the footer readout is
-  // now the deck's role coverage, not a redundant name/count line. Fetched per
-  // selected deck; untagged/empty decks honestly read zeros.
+  // WREC composition of the selected deck — the readout IS the deck's role
+  // coverage now. Fetched per selected deck; untagged/empty decks read zeros.
   const [tagRows, setTagRows] = useState([]);
 
   const dimColor    = mode === "light" ? theme.muted : theme.dim;
   const textColor   = mode === "light" ? theme.ink   : theme.white;
   const ruleColor   = mode === "light" ? theme.gold  : theme.amber;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
+  const trackColor  = mode === "light" ? theme.border : theme.surface;
   const plateBg     = mode === "light" ? theme.paper : theme.surface;
 
   // Cache-first (memoized) lookup — this used to hit live api.scryfall.com on
@@ -73,58 +71,18 @@ export default function LegendIdentity({ legend }) {
   }, [decks]);
 
   const cardImage = oracleCard ? (getCardImage(oracleCard, "normal") ?? getCardImage(oracleCard, "large")) : null;
-  const typeLine = oracleCard?.type_line ?? legend.type_line ?? "";
-  // Every legal commander is a legendary creature, so "Legendary Creature — "
-  // is dead weight eating horizontal space. Display-only: show the subtypes
-  // after the em dash; fall back to the full type if it's not a creature
-  // (e.g. a planeswalker/Background commander) so nothing reads blank.
-  const displayType = (/creature/i.test(typeLine) && typeLine.includes("—"))
-    ? (typeLine.split("—")[1]?.trim() || typeLine)
-    : typeLine;
-  const manaCost = formatManaCost(oracleCard?.mana_cost ?? oracleCard?.card_faces?.[0]?.mana_cost ?? legend.mana_cost);
 
-  // ONE definition of "this legend's deck" — the readout fields and the deck
-  // row below both use this same resolved deck, so they can never point at
-  // different rows. See lib/legendDeck.js for the resolution rule.
-  const deck = resolveLegendDeck(decks);
-  // Count by card quantity, same as ReviewScreen's band (multi-tag can sum past
-  // the deck size — it's a composition readout, not a partition).
-  const wrecCounts = WREC_CHIPS.map(({ tag, label }) => {
+  // WREC bars — count each category by card quantity (multi-tag can sum past
+  // the deck size; it's a composition readout, not a partition), then measure
+  // it against Rachel Weeks' recommended target. ratio caps the fill at 1 but
+  // is kept uncapped so an OVER-target category can be marked (accent count).
+  const wrecBars = WREC_CHIPS.map(({ tag, label }) => {
     let n = 0;
     for (const r of tagRows) if (r.tags?.includes(tag)) n += (r.quantity ?? 1);
-    return { tag, label, n };
+    const target = CATEGORY_META[tag]?.target ?? 0;
+    const ratio = target ? n / target : 0;
+    return { tag, label, n, target, ratio };
   });
-  // No deck row yet still counts 1: the commander is part of the 100 but is
-  // never written to deck_cards (deckTotal's own rule) — without this, the
-  // readout flips 0/100 → 1/100 the moment the deck list is first opened.
-  const total = deck ? deckTotal(deck) : 1;
-  const complete = total >= DECK_GATE;
-
-  const field = (label, value, valueColor) => (
-    <div style={{ minWidth: 0 }}>
-      <div style={{
-        fontFamily: "'Noto Sans Mono', monospace",
-        fontSize: 9,
-        letterSpacing: "0.16em",
-        textTransform: "uppercase",
-        color: dimColor,
-        marginBottom: 1,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontFamily: "'Zilla Slab', serif",
-        fontSize: 15,
-        lineHeight: 1.15,
-        color: valueColor ?? textColor,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}>
-        {value || "—"}
-      </div>
-    </div>
-  );
 
   return (
     <div style={{
@@ -166,49 +124,56 @@ export default function LegendIdentity({ legend }) {
           )}
         </div>
 
-        {/* Readout — label/value fields, vertically centered */}
+        {/* Readout — WREC composition bars, vertically centered. Each bar fills
+            toward its Rachel Weeks target; a category at/over target reads in the
+            accent (a full gold bar + gold count is the "covered" tell), a zero
+            reads dimmed (the dump-stat tell). No name/type/mana/deck fields — the
+            card art already carries the identity, and the box tile carries the
+            name; this pane is now purely "how is this deck composed". */}
         <div style={{
           flex: 1, minWidth: 0,
           display: "flex", flexDirection: "column", justifyContent: "center",
-          gap: 9,
+          gap: 10,
         }}>
-          {field("name", legend.name)}
-          {field("type", displayType.toLowerCase())}
-          <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 9,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              color: dimColor,
-              marginBottom: 1,
-            }}>
-              mana
-            </div>
-            <div style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 14,
-              color: textColor,
-            }}>
-              {manaCost || "—"}
-            </div>
-          </div>
-          {field("deck", `${total}/${DECK_GATE}`, complete ? ruleColor : textColor)}
+          {wrecBars.map(({ tag, label, n, target, ratio }) => {
+            const met = ratio >= 1;
+            const empty = n === 0;
+            return (
+              <div key={tag} style={{ minWidth: 0 }}>
+                <div style={{
+                  display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                  gap: 8, marginBottom: 3,
+                }}>
+                  <span style={{
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    color: dimColor,
+                  }}>
+                    {label}
+                  </span>
+                  <span style={{
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11,
+                    color: empty ? dimColor : met ? ruleColor : textColor,
+                    flexShrink: 0,
+                  }}>
+                    {n}/{target}
+                  </span>
+                </div>
+                {/* Track + fill. Fill caps at 100% even when over target; the
+                    accent color + accent count above signal the overflow. */}
+                <div style={{ height: 4, background: trackColor, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    width: `${Math.min(1, ratio) * 100}%`,
+                    background: empty ? "transparent" : ruleColor,
+                  }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-
-      {/* Footer — WREC composition readout (Change 12), replacing the old
-          name·count row (which just repeated the sprite + readout above). The
-          deck-row door is gone: loading is now "tap the already-selected
-          legend" (Change 13, handled in Home). Read-only band — no filtering
-          here; zeros are honest for untagged/empty decks. Constant footprint. */}
-      <div style={{ flexShrink: 0, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
-        <WrecBand
-          counts={wrecCounts}
-          accent={ruleColor}
-          muted={dimColor}
-          text={textColor}
-        />
       </div>
     </div>
   );

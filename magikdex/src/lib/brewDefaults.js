@@ -10,7 +10,7 @@ const KEY = "magicdex-brew-defaults";
 
 export const DEFAULT_BREW_DEFAULTS = {
   sort: "edhrec",       // "edhrec" | "name" | "cmc" — initial swipeOrder
-  excludeLands: true,   // append -t:land to the seed query (matches prior behavior)
+  excludeLands: false,  // append -t:land to the seed query (UAT 2026-07-14: OFF by default)
 
   // ── Future advanced options (placeholders — not built yet) ──
   // Add any of these to the object and read them in seedSwipeQueue; older

@@ -457,14 +457,17 @@ export default function ReviewScreen({
                 minHeight: 44, minWidth: 0,
                 display: "flex", alignItems: "center", gap: 4,
                 background: "transparent", border: "none", padding: 0,
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.06em",
+                // UAT batch 2, item 9 — section headers carry real H1 weight
+                // (Zilla display serif), not paragraph-sized mono.
+                fontFamily: "'Zilla Slab', serif",
+                fontWeight: 700,
+                fontSize: 17, letterSpacing: "0.08em",
                 color: "var(--primary)",
                 cursor: "pointer", WebkitTapHighlightColor: "transparent",
               }}
             >
               WREC
-              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 18, color: "var(--muted)" }}>
                 {wrecOpen ? "expand_less" : "expand_more"}
               </span>
               {wrecFilter && (
@@ -479,9 +482,11 @@ export default function ReviewScreen({
             </button>
           ) : (
             <span style={{
-              fontSize: 11,
-              letterSpacing: "0.14em",
-              color: "var(--muted)",
+              // Same H1 weight as the WREC trigger (item 9) — one section rank.
+              fontFamily: "'Zilla Slab', serif",
+              fontWeight: 700,
+              fontSize: 17, letterSpacing: "0.08em",
+              color: "var(--text)",
             }}>
               {label} · {total}
               {wrecFilter && ` · ${LABEL_BY_TAG[wrecFilter]}`}
@@ -517,10 +522,12 @@ export default function ReviewScreen({
             <div key={g.key}>
               {g.label && (
                 <div style={{
+                  // UAT batch 2, item 9 — group headers are a real H2 rank
+                  // under the section header, not near-invisible 10px mono.
                   fontFamily: "'Noto Sans Mono', monospace",
-                  fontSize: 10, letterSpacing: "0.12em",
-                  color: "var(--muted)",
-                  padding: "10px 0 2px",
+                  fontSize: 13, letterSpacing: "0.12em",
+                  color: "var(--text2)",
+                  padding: "14px 0 3px",
                 }}>
                   {g.label} · {g.items.reduce((n, c) => n + c.quantity, 0)}
                 </div>

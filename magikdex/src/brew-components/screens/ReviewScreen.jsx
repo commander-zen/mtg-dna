@@ -16,15 +16,6 @@ const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 // WREC_CHIPS / LABEL_BY_TAG now live in the shared WrecBand (canonical taxonomy);
 // imported above so the composition band and the per-row tag chips share one list.
 
-// Oracle text, DFC-aware: join both faces so the user judges the whole card.
-function oracleOf(card) {
-  if (!card) return "";
-  if (card.oracle_text) return card.oracle_text;
-  if (card.card_faces?.length)
-    return card.card_faces.map(f => f.oracle_text).filter(Boolean).join("\n\n//\n\n");
-  return "";
-}
-
 // Review the accumulated swipe results before saving. Purely presentational —
 // the Supabase writes live in the page that owns the brew state (Brew.jsx),
 // keeping brew-components free of db imports.
@@ -190,6 +181,9 @@ export default function ReviewScreen({
   // over always-on chips so five 44px targets fit mobile width cleanly and
   // untagged cards stay chip-free (no "uncategorized" noise).
   const [expandedKey, setExpandedKey] = useState(null);
+  // UAT batch 2, item 12 — a row's mini-card, tapped, blows up to a full-size
+  // overlay (same gesture as the commander name up top). Holds the card name.
+  const [rowCard, setRowCard] = useState(null);
   // Per-card gameplay data (type/mana/oracle), keyed by name. deck_cards only
   // stores name+quantity, so anything richer is fetched on demand — tagging a
   // card with no visible context is guesswork. undefined = not yet resolved,
@@ -540,7 +534,7 @@ export default function ReviewScreen({
             const autoTags = cardTags?.[key]?.autoTags ?? [];
             const expanded = expandedKey === key;
             const card = cardData[name];               // undefined | null | object
-            const oracle = card ? oracleOf(card) : "";
+            const cardImg = card ? (getCardImage(card, "normal") ?? getCardImage(card, "small")) : null;
             return (
               <div key={name}>
                 {/* Change 14 — swipe-left to delete (a red delete zone reveals
@@ -598,8 +592,10 @@ export default function ReviewScreen({
                         overflow so tagging density can't break row height.
                         Dashed border = auto-suggested, solid = user's (same
                         split as the expanded tag grid). Untagged rows render
-                        nothing — never an empty placeholder. */}
-                    {!expanded && tags.length > 0 && (
+                        nothing — never an empty placeholder. UAT batch 2, item
+                        13 — the icon persists through row expansion (it used to
+                        vanish the moment you opened the row). */}
+                    {tags.length > 0 && (
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         {tags.slice(0, 2).map(t => {
                           const auto = autoTags.includes(t);
@@ -634,84 +630,112 @@ export default function ReviewScreen({
                 </div>
                 </div>
 
-                {/* Oracle text — shown only while tagging, so the WREC role can
-                    be judged without leaving the screen. Body font for
-                    readability, dimmed, line breaks preserved. */}
-                {live && expanded && oracle && (
-                  <div style={{
-                    fontFamily: "'Noto Sans', sans-serif",
-                    fontSize: 12,
-                    lineHeight: 1.5,
-                    color: "var(--text2)",
-                    whiteSpace: "pre-wrap",
-                    padding: "2px 0 8px",
-                  }}>
-                    {oracle}
-                  </div>
-                )}
-
-                {/* Action grid — the five WREC tag chips plus the move-board
-                    action as a SIXTH uniform cell (3×2, equal widths, nothing
-                    hanging). Same chip form throughout; the swap glyph marks
-                    move as an action rather than a tag. User-facing copy says
-                    "mainboard" even though the section value is decklist. */}
+                {/* Expanded row (UAT batch 2, items 11–13) — the real card as a
+                    mini-card on the left (tap = full-size overlay, item 12),
+                    the WREC tag targets + move beside it on the right. The
+                    mini-card carries the type/mana/rules text the row no longer
+                    crams in; the persistent tag icon lives up in the row header
+                    (item 13). */}
                 {live && expanded && (
                   <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: 6,
-                    padding: "4px 0 10px",
+                    display: "flex", alignItems: "stretch", gap: 12,
+                    padding: "4px 0 12px",
                   }}>
-                    {WREC_CHIPS.map(({ tag, label }) => {
-                      const active = tags.includes(tag);
-                      // Auto-suggested: hollow — primary outline/text, no fill.
-                      // A user tag fills solid. Tap behavior is identical.
-                      const auto = active && autoTags.includes(tag);
-                      return (
+                    {/* Mini-card — tap to blow up (item 12). Fixed card-ratio
+                        box; the corner mask matches every other card image. */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRowCard(name); }}
+                      aria-label={`Show ${name} full size`}
+                      style={{
+                        flexShrink: 0, width: 104,
+                        aspectRatio: "63 / 88",
+                        padding: 0, border: "none",
+                        background: "var(--panel)",
+                        borderRadius: "5.5% / 4%", overflow: "hidden",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                        cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      {cardImg ? (
+                        <img
+                          src={cardImg}
+                          alt={name}
+                          draggable={false}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                        />
+                      ) : (
+                        <span style={{
+                          width: "100%", height: "100%",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontFamily: "'Noto Sans Mono', monospace",
+                          fontSize: 10, color: "var(--muted)", textAlign: "center", padding: 6,
+                        }}>
+                          {card === null ? "no card" : "…"}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* WREC tag targets + the move-board action as a sixth
+                        uniform cell (2×3 beside the card, equal widths). Same
+                        chip form throughout; the swap glyph marks move as an
+                        action, not a tag. User-facing copy says "mainboard"
+                        even though the section value is decklist. */}
+                    <div style={{
+                      flex: 1, minWidth: 0,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gridAutoRows: "minmax(44px, 1fr)",
+                      gap: 6,
+                    }}>
+                      {WREC_CHIPS.map(({ tag, label }) => {
+                        const active = tags.includes(tag);
+                        // Auto-suggested: hollow — primary outline/text, no
+                        // fill. A user tag fills solid. Tap behavior identical.
+                        const auto = active && autoTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            onClick={(e) => { e.stopPropagation(); onToggleTag?.(name, sectionKey, tag); }}
+                            style={{
+                              minHeight: 44,
+                              padding: "0 6px",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              border: `1px ${auto ? "dashed" : "solid"} ${active ? "var(--primary)" : "var(--muted)"}`,
+                              background: active && !auto ? "var(--primary)" : "transparent",
+                              color: auto ? "var(--primary)" : active ? "var(--color-bg)" : "var(--muted)",
+                              fontFamily: "'Noto Sans Mono', monospace",
+                              fontSize: 10,
+                              letterSpacing: "0.08em",
+                              borderRadius: 0,
+                              cursor: "pointer",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                          >{label}</button>
+                        );
+                      })}
+                      {onMoveCard && (
                         <button
-                          key={tag}
-                          onClick={(e) => { e.stopPropagation(); onToggleTag?.(name, sectionKey, tag); }}
+                          onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
                           style={{
                             minHeight: 44,
                             padding: "0 6px",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            border: `1px ${auto ? "dashed" : "solid"} ${active ? "var(--primary)" : "var(--muted)"}`,
-                            background: active && !auto ? "var(--primary)" : "transparent",
-                            color: auto ? "var(--primary)" : active ? "var(--color-bg)" : "var(--muted)",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                            border: "1px solid var(--muted)",
+                            background: "transparent",
+                            color: "var(--muted)",
                             fontFamily: "'Noto Sans Mono', monospace",
                             fontSize: 10,
                             letterSpacing: "0.08em",
-                            // Scoped exception to the app's no-radius rule — only
-                            // these action chips get a soft pill corner.
-                            borderRadius: 6,
+                            borderRadius: 0,
                             cursor: "pointer",
                             WebkitTapHighlightColor: "transparent",
                           }}
-                        >{label}</button>
-                      );
-                    })}
-                    {onMoveCard && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
-                        style={{
-                          minHeight: 44,
-                          padding: "0 6px",
-                          display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                          border: "1px solid var(--muted)",
-                          background: "transparent",
-                          color: "var(--muted)",
-                          fontFamily: "'Noto Sans Mono', monospace",
-                          fontSize: 10,
-                          letterSpacing: "0.08em",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: 14 }}>swap_vert</span>
-                        {sectionKey === "decklist" ? "MAYBE" : "MAIN"}
-                      </button>
-                    )}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: 14 }}>swap_vert</span>
+                          {sectionKey === "decklist" ? "MAYBE" : "MAIN"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1334,6 +1358,44 @@ export default function ReviewScreen({
               color: commanderFull === undefined ? "var(--danger)" : "var(--muted)",
             }}>
               {commanderFull === undefined ? "couldn't load the card" : "loading…"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Row mini-card blown up (UAT batch 2, item 12) — tap the expanded
+          row's mini-card to read the full card, tap anywhere to dismiss. The
+          card data is already resolved for the row, so this paints instantly. */}
+      {rowCard && (
+        <div
+          onClick={() => setRowCard(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${rowCard} card`}
+          style={{
+            position: "fixed", inset: 0, zIndex: 250,
+            background: "rgba(0,0,0,0.82)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          {cardData[rowCard] ? (
+            <img
+              src={getCardImage(cardData[rowCard], "normal") ?? getCardImage(cardData[rowCard], "large")}
+              alt={rowCard}
+              draggable={false}
+              style={{
+                width: "min(88vw, 400px)",
+                borderRadius: "4.75% / 3.5%",
+              }}
+            />
+          ) : (
+            <div style={{
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 12,
+              color: cardData[rowCard] === null ? "var(--danger)" : "var(--muted)",
+            }}>
+              {cardData[rowCard] === null ? "couldn't load the card" : "loading…"}
             </div>
           )}
         </div>

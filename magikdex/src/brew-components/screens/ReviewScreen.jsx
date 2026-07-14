@@ -444,16 +444,71 @@ export default function ReviewScreen({
           paddingBottom: 6,
           marginBottom: 6,
         }}>
-          <span style={{
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            color: "var(--muted)",
-          }}>
-            {label} · {total}
-            {wrecFilter && ` · ${LABEL_BY_TAG[wrecFilter]}`}
-          </span>
+          {/* UAT batch 2, item 6 — the decklist header IS the WREC trigger now:
+              no DECKLIST label, no count (the list is right there), just WREC.
+              An active filter is still named beside it. Maybeboard (and the
+              non-live save flow) keep the plain text label. */}
+          {live && sectionKey === "decklist" ? (
+            <button
+              onClick={() => setWrecOpen(o => !o)}
+              aria-label="WREC composition — show category counts"
+              aria-expanded={wrecOpen}
+              style={{
+                minHeight: 44, minWidth: 0,
+                display: "flex", alignItems: "center", gap: 4,
+                background: "transparent", border: "none", padding: 0,
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.06em",
+                color: "var(--primary)",
+                cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              WREC
+              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
+                {wrecOpen ? "expand_less" : "expand_more"}
+              </span>
+              {wrecFilter && (
+                <span style={{
+                  fontSize: 11, letterSpacing: "0.14em",
+                  color: "var(--muted)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  · {LABEL_BY_TAG[wrecFilter]}
+                </span>
+              )}
+            </button>
+          ) : (
+            <span style={{
+              fontSize: 11,
+              letterSpacing: "0.14em",
+              color: "var(--muted)",
+            }}>
+              {label} · {total}
+              {wrecFilter && ` · ${LABEL_BY_TAG[wrecFilter]}`}
+            </span>
+          )}
           {accessory}
         </div>
+        {/* Disclosed WREC band — opens right under its trigger, still the
+            filter door: tapping a category applies the filter, tapping the
+            active one clears. UAT batch 2, item 8 — the band STAYS OPEN after
+            a pick (it's a dashboard, not a menu); only the trigger closes it.
+            Zeros stay dimmed but tappable (a zero IS the gap → "add more"). */}
+        {live && sectionKey === "decklist" && wrecOpen && (
+          <div style={{ paddingBottom: 6 }}>
+            <WrecBand
+              counts={wrecCounts}
+              accent="var(--primary)"
+              muted="var(--muted)"
+              text="var(--text)"
+              activeTag={wrecFilter}
+              onTapTag={(tag) => {
+                setWrecFilter(f => (f === tag ? null : tag));
+                setAddMoreError(null);
+              }}
+            />
+          </div>
+        )}
         {panel}
         {items.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>—</div>
@@ -740,11 +795,12 @@ export default function ReviewScreen({
       paddingBottom: showBottomNav ? "calc(env(safe-area-inset-bottom) + 64px)" : SAFE_BOTTOM,
     }}>
 
-      {/* Frozen header — the commander anchor AND the WREC band stay pinned to
-          the top of the scrolling list (spreadsheet top-row behavior), so the
-          deck stays identifiable and its composition readable as rows scroll
-          beneath. Safe-area top inset respected; the content below clears it at
-          rest so the first row is never hidden under the header. */}
+      {/* Frozen header — the commander anchor stays pinned to the top of the
+          scrolling list (spreadsheet top-row behavior), so the deck stays
+          identifiable as rows scroll beneath. The WREC readout lives on the
+          decklist section header now (UAT batch 2, item 6). Safe-area top
+          inset respected; the content below clears it at rest so the first
+          row is never hidden under the header. */}
       {live && (
         <div style={{
           position: "sticky",
@@ -794,30 +850,6 @@ export default function ReviewScreen({
                 {commander.name}
               </span>
             </button>
-            {/* Vault UAT item 2 — the WREC disclosure trigger lives in the
-                header row, in the slot the deck count vacated (item 1:
-                DECKLIST · N below already carries the count — no reason to
-                show it twice). Label is just WREC, no numbers; an active
-                filter is named by the section header instead. */}
-            <button
-              onClick={() => setWrecOpen(o => !o)}
-              aria-label="WREC composition — show category counts"
-              aria-expanded={wrecOpen}
-              style={{
-                minHeight: 44, flexShrink: 0,
-                display: "flex", alignItems: "center", gap: 4,
-                background: "transparent", border: "none", padding: "0 4px",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.06em",
-                color: "var(--primary)",
-                cursor: "pointer", WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              WREC
-              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
-                {wrecOpen ? "expand_less" : "expand_more"}
-              </span>
-            </button>
             {/* Export — Moxfield bulk-edit text, WREC tags as #hashtags. Copy
                 is guaranteed; the share sheet (where supported) is a bonus. */}
             <button
@@ -838,33 +870,6 @@ export default function ReviewScreen({
           </div>
           )}
 
-          {/* Disclosed WREC band (the trigger lives in the header row above) —
-              the shared WrecBand, still the filter door: tapping a category
-              applies the filter and re-collapses (the narrowed list is the
-              answer); tapping the active one clears. Zeros stay dimmed but
-              tappable (a zero IS the gap → empty filter + "add more"). */}
-          {wrecOpen && (
-            <div style={{
-              maxWidth: 430,
-              margin: "0 auto",
-              paddingLeft: 12, paddingRight: 12,
-              paddingBottom: 4,
-              borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
-            }}>
-              <WrecBand
-                counts={wrecCounts}
-                accent="var(--primary)"
-                muted="var(--muted)"
-                text="var(--text)"
-                activeTag={wrecFilter}
-                onTapTag={(tag) => {
-                  setWrecFilter(f => (f === tag ? null : tag));
-                  setAddMoreError(null);
-                  setWrecOpen(false);
-                }}
-              />
-            </div>
-          )}
         </div>
       )}
 

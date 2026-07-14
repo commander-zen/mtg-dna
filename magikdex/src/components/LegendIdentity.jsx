@@ -22,7 +22,7 @@ export default function LegendIdentity({ legend }) {
 
   const dimColor    = theme.dim;
   const textColor   = theme.white;
-  const ruleColor   = theme.amber;
+  const ruleColor   = theme.accent;
   const trackColor  = theme.surface;
   const plateBg     = theme.surface;
 

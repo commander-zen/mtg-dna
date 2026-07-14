@@ -120,11 +120,11 @@ export default function SwipeScreen({
     if (!document.getElementById("gc-style")) {
       const style = document.createElement("style");
       style.id = "gc-style";
-      // Helix gold/amber breathing glow — single hue, the app's accent.
+      // Steel-storm breathing glow — single hue, the app's accent (#38bdf8).
       style.textContent = `
         @keyframes gc-glow {
-          0%, 100% { box-shadow: 0 0 16px 3px rgba(232,160,32,0.5), 0 0 36px 10px rgba(232,160,32,0.16); }
-          50%      { box-shadow: 0 0 22px 6px rgba(232,160,32,0.78), 0 0 48px 14px rgba(232,160,32,0.22); }
+          0%, 100% { box-shadow: 0 0 16px 3px rgba(56,189,248,0.5), 0 0 36px 10px rgba(56,189,248,0.16); }
+          50%      { box-shadow: 0 0 22px 6px rgba(56,189,248,0.78), 0 0 48px 14px rgba(56,189,248,0.22); }
         }
       `;
       document.head.appendChild(style);
@@ -603,7 +603,7 @@ export default function SwipeScreen({
                           fontFamily: "'Noto Sans Mono', monospace",
                           fontSize: 10,
                           letterSpacing: "0.1em",
-                          color: "#e8a020",
+                          color: "#38bdf8",
                         }}>
                           GAME CHANGER
                         </span>
@@ -850,7 +850,7 @@ export default function SwipeScreen({
                   flexShrink: 0, width: 44, minHeight: 44,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   background: "transparent", border: "none",
-                  borderLeft: "1px solid rgba(232,160,32,0.4)",
+                  borderLeft: "1px solid rgba(56,189,248,0.4)",
                   color: queryDraft.trim() ? "var(--primary)" : "var(--muted)",
                   cursor: queryDraft.trim() ? "pointer" : "default",
                   WebkitTapHighlightColor: "transparent",
@@ -865,7 +865,7 @@ export default function SwipeScreen({
                   flexShrink: 0, width: 44, minHeight: 44,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   background: "transparent", border: "none",
-                  borderLeft: "1px solid rgba(232,160,32,0.4)",
+                  borderLeft: "1px solid rgba(56,189,248,0.4)",
                   color: "var(--muted)",
                   cursor: "pointer", WebkitTapHighlightColor: "transparent",
                 }}

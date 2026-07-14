@@ -451,7 +451,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
               <div style={{
                 fontFamily: "'Noto Sans Mono', monospace",
                 fontSize: 12,
-                color: importResult.error ? theme.red ?? "#a04040" : dimColor,
+                color: importResult.error ? theme.red : dimColor,
                 lineHeight: 1.5,
               }}>
                 {importResult.error

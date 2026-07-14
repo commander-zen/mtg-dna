@@ -2,10 +2,12 @@ import { useTheme } from "../theme/ThemeContext";
 
 const TIERS = ["S", "A", "B"];
 
+// Steel-storm tier badges (item 3): S rides the electric accent, A a dimmer
+// steel, B a near-muted grey.
 const TIER_COLORS = {
-  S: "#c8860a",
-  A: "#7ab89a",
-  B: "#2e3e34",
+  S: "#38bdf8",
+  A: "#5f9bbf",
+  B: "#2a3138",
 };
 
 export default function ToolChips({ tools }) {

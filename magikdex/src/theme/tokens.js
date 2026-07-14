@@ -1,13 +1,13 @@
-// Single dark palette — light mode was removed (UAT batch 2, item 2). The
-// app is dark-only now; every surface reads from this one object.
+// Single dark palette — light mode was removed (UAT batch 2, item 2).
+// Jackson Storm "steel storm" recolor (item 3): near-black grounds, one
+// electric-steel accent (#38bdf8) in place of the old gold/amber.
 export const tokens = {
-  base:    "#0d1117",
-  surface: "#111820",
-  green:   "#7ab89a",
-  amber:   "#c8860a",
-  white:   "#e8f0ee",
-  muted:   "#2e3e34",
-  border:  "#1a2520",
-  dim:     "#4a6358",
-  red:     "#a04040",
+  base:    "#08090c",
+  surface: "#12151a",
+  accent:  "#38bdf8",
+  white:   "#e8eaed",
+  muted:   "#2a3138",
+  border:  "#1b2129",
+  dim:     "#5a6672",
+  red:     "#e0555f",
 };

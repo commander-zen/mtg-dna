@@ -5,7 +5,7 @@ export default function PageHeader({ eyebrow, title }) {
 
   const eyebrowColor = theme.dim;
   const titleColor   = theme.white;
-  const ruleColor    = theme.amber;
+  const ruleColor    = theme.accent;
 
   return (
     <div style={{ marginBottom: 32 }}>

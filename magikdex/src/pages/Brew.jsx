@@ -12,17 +12,19 @@ import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags,
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
-// Brew sub-screens are always dark, regardless of the app theme mode —
-// card art is designed against dark and the light tokens were leaking in.
+// Brew sub-screens are always dark — card art is designed against dark.
+// Jackson Storm "steel storm" recolor (UAT batch 2, item 3): near-black
+// grounds, one electric-steel accent replacing the old gold/amber, a dimmer
+// steel secondary replacing the green.
 const BREW = {
-  base:    "#0a0e1a",
-  surface: "#111820",
-  text:    "#e8f0ee",
-  dim:     "#4a6358",
-  amber:   "#e8a020",
-  green:   "#7ab89a",
-  red:     "#a04040",
-  border:  "#1a2520",
+  base:    "#08090c",
+  surface: "#12151a",
+  text:    "#e8eaed",
+  dim:     "#5a6672",
+  accent:  "#38bdf8",
+  accent2: "#5f9bbf",
+  red:     "#e0555f",
+  border:  "#1b2129",
 };
 
 // The brew-components were ported from Deck Stack, whose styles reference
@@ -37,11 +39,11 @@ const BREW_VARS = {
   "--text": BREW.text,
   "--text2": BREW.dim,
   "--muted": BREW.dim,
-  "--primary": BREW.amber,
-  "--secondary": BREW.green,
-  "--success": BREW.green,
+  "--primary": BREW.accent,
+  "--secondary": BREW.accent2,
+  "--success": BREW.accent2,
   "--danger": BREW.red,
-  "--active": BREW.amber,
+  "--active": BREW.accent,
   "--color-bg": BREW.base,
   "--color-surface": BREW.surface,
   "--color-surface-raised": BREW.surface,
@@ -49,7 +51,7 @@ const BREW_VARS = {
   "--color-chrome-light": BREW.border,
   "--color-chrome-mid": BREW.dim,
   "--color-chrome-dark": BREW.border,
-  "--color-titlebar": BREW.amber,
+  "--color-titlebar": BREW.accent,
   "--color-titlebar-text": BREW.base,
   "--color-text-primary": BREW.text,
   "--color-text-secondary": BREW.dim,

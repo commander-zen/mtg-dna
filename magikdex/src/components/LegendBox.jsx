@@ -87,7 +87,7 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
 
   const dimColor    = theme.dim;
   const textColor   = theme.white;
-  const ringColor   = theme.amber;
+  const ringColor   = theme.accent;
   const borderColor = theme.muted;
   const slotBg      = theme.surface;
 
@@ -779,8 +779,8 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                     style={{
                       minHeight: 44, flex: 1,
                       background: "transparent",
-                      border: "1px solid #a04040",
-                      color: "#a04040",
+                      border: `1px solid ${theme.red}`,
+                      color: theme.red,
                       fontFamily: "'Noto Sans Mono', monospace",
                       fontSize: 12, letterSpacing: "0.08em",
                       cursor: deleting ? "default" : "pointer",
@@ -792,7 +792,7 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
                   </button>
                 </div>
                 {deleteError && (
-                  <div style={{ fontSize: 12, color: "#a04040", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12, color: theme.red, lineHeight: 1.5 }}>
                     {deleteError}
                   </div>
                 )}

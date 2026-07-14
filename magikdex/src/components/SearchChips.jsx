@@ -7,7 +7,7 @@ export default function SearchChips({ selected, onToggle }) {
   const { theme } = useTheme();
 
   const dimColor     = theme.dim;
-  const accentColor  = theme.amber;
+  const accentColor  = theme.accent;
   const borderColor  = theme.muted;
 
   return (

@@ -104,7 +104,7 @@ export default function SettingsSheet({ open, onClose }) {
   const textColor   = theme.white;
   const dimColor    = theme.dim;
   const borderColor = theme.muted;
-  const accent      = theme.amber;
+  const accent      = theme.accent;
 
   const rowStyle = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -260,7 +260,7 @@ export default function SettingsSheet({ open, onClose }) {
               fontSize: 11,
               maxWidth: "60%",
               textAlign: "right",
-              color: idCopied ? accent : authError ? "#a04040" : dimColor,
+              color: idCopied ? accent : authError ? theme.red : dimColor,
             }}>
               {idCopied ? "copied" : userId ? `${userId.slice(0, 8)}…` : authError ?? "signing in…"}
             </span>

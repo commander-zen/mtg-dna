@@ -41,6 +41,7 @@ export default function SwipeScreen({
   onDoubleTag,
   stackOrigin,
   stackNarrow = "", totalStackCount = 0, onClearFilter, onSearchAll,
+  onEditQuery,
   handMode = false, onHandCut, onHandMaybe, onHandUncut, onHandUnmaybe,
 }) {
   // Cards already sorted into a pile/decklist/maybeboard leave the carousel
@@ -406,6 +407,41 @@ export default function SwipeScreen({
     }
   }
 
+  // Editable query chip (Change 10) — the stack's identity is a tappable chip:
+  // a search stack shows its query, the default synergy stack shows a readable
+  // "edhrec · commander" label. Tapping opens an inline editor; submitting runs
+  // a fresh Scryfall search (onEditQuery → the parent's global search, which
+  // still ANDs commander-legality + this deck's color identity). So "editing the
+  // stack" is always editing a query, per Ben — the synergy default just starts
+  // that query from empty. Only for legend sessions (onEditQuery), never in the
+  // deck-flip review mode.
+  const searchStack = stackOrigin?.type === "search";
+  const queryLabel = searchStack
+    ? `search: ${stackOrigin.query}`
+    : `edhrec · ${commanderCard?.name ?? "commander"}`;
+  const [editingQuery, setEditingQuery] = useState(false);
+  const [queryDraft, setQueryDraft]     = useState("");
+  const [queryBusy, setQueryBusy]       = useState(false);
+  const [queryMsg, setQueryMsg]         = useState(null);
+
+  function openQueryEditor() {
+    setQueryDraft(searchStack ? stackOrigin.query : "");
+    setQueryMsg(null);
+    setEditingQuery(true);
+  }
+  async function submitQuery() {
+    const q = queryDraft.trim();
+    if (!q || queryBusy) return;
+    setQueryBusy(true);
+    setQueryMsg(null);
+    const res = await onEditQuery?.(q);
+    setQueryBusy(false);
+    if (res && !res.ok) { setQueryMsg(res.message); return; }
+    // Success: the parent swapped in the new stack — collapse the editor.
+    setEditingQuery(false);
+    setQueryMsg(null);
+  }
+
   async function openCommander() {
     if (!commanderName) return;
     setShowCommander(true);
@@ -653,9 +689,7 @@ export default function SwipeScreen({
                     ? `${pile.length} kept`
                     : stackNarrow
                       ? `${effectiveCards.length} of ${totalStackCount} in stack`
-                      : stackOrigin?.type === "search"
-                        ? `search: ${stackOrigin.query} · ${effectiveCards.length - idx} in stack`
-                        : `${effectiveCards.length - idx} in stack`}
+                      : `${effectiveCards.length - idx} in stack`}
             </span>
           </span>
         </button>
@@ -750,6 +784,116 @@ export default function SwipeScreen({
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}
           >×</button>
+        </div>
+      )}
+
+      {/* Editable query chip (Change 10) — the stack identity, tappable to
+          re-query. Collapsed: the label + a pencil. Tapped: an inline Scryfall
+          search box (✓ submits, ✕ cancels). Legend sessions only, never in the
+          deck-flip review mode. Shares the filter chip's slot; only one of the
+          two is ever live (in-stack narrowing is unreachable in the current IA). */}
+      {onEditQuery && !handMode && !stackNarrow && (
+        <div style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 48px)",
+          left: 8, right: 8, zIndex: 4,
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          {!editingQuery ? (
+            <button
+              onClick={openQueryEditor}
+              aria-label="Edit the search query for this stack"
+              style={{
+                alignSelf: "flex-start", maxWidth: "100%",
+                minHeight: 44,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "rgba(0,0,0,0.55)",
+                border: "1px solid var(--primary)",
+                padding: "0 10px",
+                cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span style={{
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 10, letterSpacing: "0.08em",
+                color: "var(--primary)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {queryLabel}
+              </span>
+              <span className="material-symbols-rounded" style={{ fontSize: 15, color: "var(--primary)", flexShrink: 0 }}>edit</span>
+            </button>
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "stretch",
+              background: "rgba(0,0,0,0.75)",
+              border: "1px solid var(--primary)",
+            }}>
+              <input
+                type="text"
+                value={queryDraft}
+                autoFocus
+                onChange={e => setQueryDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") submitQuery();
+                  if (e.key === "Escape") { setEditingQuery(false); setQueryMsg(null); }
+                }}
+                placeholder="name or scryfall syntax"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+                readOnly={queryBusy}
+                style={{
+                  flex: 1, minWidth: 0, boxSizing: "border-box", minHeight: 44,
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.9)",
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 16,
+                  border: "none", padding: "0 10px", outline: "none",
+                }}
+              />
+              <button
+                onClick={submitQuery}
+                disabled={queryBusy || !queryDraft.trim()}
+                aria-label="Run search"
+                style={{
+                  flexShrink: 0, width: 44, minHeight: 44,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none",
+                  borderLeft: "1px solid rgba(232,160,32,0.4)",
+                  color: queryDraft.trim() ? "var(--primary)" : "var(--muted)",
+                  cursor: queryDraft.trim() ? "pointer" : "default",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{queryBusy ? "hourglass_empty" : "search"}</span>
+              </button>
+              <button
+                onClick={() => { setEditingQuery(false); setQueryMsg(null); }}
+                aria-label="Cancel"
+                style={{
+                  flexShrink: 0, width: 44, minHeight: 44,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none",
+                  borderLeft: "1px solid rgba(232,160,32,0.4)",
+                  color: "var(--muted)",
+                  cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>close</span>
+              </button>
+            </div>
+          )}
+          {queryMsg && (
+            <div style={{
+              alignSelf: "flex-start", maxWidth: "100%",
+              background: "rgba(0,0,0,0.55)",
+              padding: "3px 8px",
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 11, lineHeight: 1.4,
+              color: "rgba(255,255,255,0.7)",
+            }}>
+              {queryMsg}
+            </div>
+          )}
         </div>
       )}
 

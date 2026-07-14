@@ -1371,6 +1371,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             totalStackCount={totalStackCount}
             onClearFilter={session ? clearStackNarrow : undefined}
             onSearchAll={session ? runGlobalSearch : undefined}
+            onEditQuery={session ? runGlobalSearch : undefined}
           />
         )}
 

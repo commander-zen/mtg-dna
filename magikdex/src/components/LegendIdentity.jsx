@@ -72,6 +72,13 @@ export default function LegendIdentity({ legend }) {
 
   const cardImage = oracleCard ? (getCardImage(oracleCard, "normal") ?? getCardImage(oracleCard, "large")) : null;
 
+  // Vault UAT item 5 — this pane has room for full category names; the band's
+  // mobile abbreviations (CARD-ADV, MASS-DIS) read as truncation here.
+  const FULL_LABEL = {
+    "card-advantage":  "CARD-ADVANTAGE",
+    "mass-disruption": "MASS-DISRUPTION",
+  };
+
   // WREC bars — count each category by card quantity (multi-tag can sum past
   // the deck size; it's a composition readout, not a partition), then measure
   // it against Rachel Weeks' recommended target. ratio caps the fill at 1 but
@@ -132,8 +139,10 @@ export default function LegendIdentity({ legend }) {
             name; this pane is now purely "how is this deck composed". */}
         <div style={{
           flex: 1, minWidth: 0,
-          display: "flex", flexDirection: "column", justifyContent: "center",
-          gap: 10,
+          // Vault UAT item 5 — the block fills its whole box: bars distribute
+          // across the full card-frame height (no dead space above/below).
+          display: "flex", flexDirection: "column", justifyContent: "space-between",
+          gap: 10, padding: "2px 0",
         }}>
           {wrecBars.map(({ tag, label, n, target, ratio }) => {
             const met = ratio >= 1;
@@ -150,7 +159,7 @@ export default function LegendIdentity({ legend }) {
                     letterSpacing: "0.14em",
                     color: dimColor,
                   }}>
-                    {label}
+                    {FULL_LABEL[tag] ?? label}
                   </span>
                   <span style={{
                     fontFamily: "'Noto Sans Mono', monospace",

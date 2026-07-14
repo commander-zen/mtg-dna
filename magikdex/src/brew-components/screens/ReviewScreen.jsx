@@ -810,8 +810,9 @@ export default function ReviewScreen({
           background: "var(--bg)",
           borderBottom: "1px solid var(--bevel-dark)",
         }}>
-          {/* Commander anchor — NAME ONLY (no art; the 56px sprite smushed
-              the name on device). Tapping the name opens the full card.
+          {/* Commander anchor — a small card thumbnail in the corner plus the
+              name (UAT batch 2, item 7; sized well under the 56px sprite that
+              smushed the name on device). Tapping either opens the full card.
               Padded left of the brew back chevron so the two never overlap. */}
           {showAnchor && (
           <div style={{
@@ -842,6 +843,19 @@ export default function ReviewScreen({
                 WebkitTapHighlightColor: "transparent",
               }}
             >
+              {commander.art && (
+                <img
+                  src={commander.art}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: 27, height: 38, objectFit: "cover",
+                    // corner mask matches the swipe card / box sprite
+                    borderRadius: "5.5% / 4%",
+                    flexShrink: 0, marginRight: 10,
+                  }}
+                />
+              )}
               <span style={{
                 overflow: "hidden",
                 textOverflow: "ellipsis",

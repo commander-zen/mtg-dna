@@ -1,11 +1,11 @@
 import { useTheme } from "../theme/ThemeContext";
 
 export default function PageHeader({ eyebrow, title }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
-  const eyebrowColor = mode === "light" ? theme.muted  : theme.dim;
-  const titleColor   = mode === "light" ? theme.ink    : theme.white;
-  const ruleColor    = mode === "light" ? theme.gold   : theme.amber;
+  const eyebrowColor = theme.dim;
+  const titleColor   = theme.white;
+  const ruleColor    = theme.amber;
 
   return (
     <div style={{ marginBottom: 32 }}>

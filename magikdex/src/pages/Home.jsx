@@ -12,15 +12,15 @@ const LAST_KEY = "magicdex-last-legend";
 // Pokémon Gen-V box — wordmark bar, commander detail pane, box tray. The whole
 // thing fits the safe area with NO scrolling anywhere (proportional flex).
 export default function Home({ onLaunchBrew, reloadSignal }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
   const [activeLegend, setActiveLegend] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const glyphColor   = mode === "light" ? `${theme.ink}80` : `${theme.white}80`;
-  const titleColor   = mode === "light" ? theme.ink   : theme.white;
-  const dimColor     = mode === "light" ? theme.muted : theme.dim;
-  const trayBg       = mode === "light" ? theme.paper : theme.surface;
-  const borderColor  = mode === "light" ? theme.border : theme.muted;
+  const glyphColor   = `${theme.white}80`;
+  const titleColor   = theme.white;
+  const dimColor     = theme.dim;
+  const trayBg       = theme.surface;
+  const borderColor  = theme.muted;
 
   // Pick the detail pane on every load: keep the current legend if it survived
   // the reload, else the persisted last-active, else the first in the Box.

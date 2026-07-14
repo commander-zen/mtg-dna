@@ -5,7 +5,7 @@ import { searchCommanders, getCardImage } from "../lib/scryfall.js";
 import { prepareImport, prepareImportFromUrl, isDeckUrl } from "../lib/moxfieldImport.js";
 
 export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
   const [query, setQuery]     = useState("");
   const [results, setResults] = useState([]);
   const [toast, setToast]     = useState(null);
@@ -82,9 +82,9 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
   }
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
-  const textColor   = mode === "light" ? theme.ink   : theme.white;
-  const dimColor    = mode === "light" ? theme.muted : theme.dim;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
+  const textColor   = theme.white;
+  const dimColor    = theme.dim;
+  const borderColor = theme.muted;
 
   // Reset the whole sheet each time it opens; abort any in-flight search on close.
   useEffect(() => {

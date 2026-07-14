@@ -12,9 +12,9 @@ const SORT_CHOICES = [
 ];
 
 // The Box surface's only chrome: a bottom sheet behind the gear glyph holding
-// the theme toggle, the brew defaults, and the colophon.
+// the brew defaults, the account controls, and the colophon.
 export default function SettingsSheet({ open, onClose }) {
-  const { theme, mode, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [defaults, setDefaults] = useState(getBrewDefaults);
   // The account behind the invisible sign-in. userId/userEmail come from the
   // live session; authError surfaces WHY there's no session (e.g. the
@@ -101,10 +101,10 @@ export default function SettingsSheet({ open, onClose }) {
     setDefaults(setBrewDefaults(patch));
   }
 
-  const textColor   = mode === "light" ? theme.ink   : theme.white;
-  const dimColor    = mode === "light" ? theme.muted : theme.dim;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
-  const accent      = mode === "light" ? theme.gold  : theme.amber;
+  const textColor   = theme.white;
+  const dimColor    = theme.dim;
+  const borderColor = theme.muted;
+  const accent      = theme.amber;
 
   const rowStyle = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -175,29 +175,6 @@ export default function SettingsSheet({ open, onClose }) {
             >
               <span className="material-symbols-rounded" style={{ fontSize: 22 }}>close</span>
             </button>
-          </div>
-
-          {/* Theme toggle */}
-          <div onClick={toggleTheme} style={rowStyle}>
-            <span style={labelStyle}>theme</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 6, color: dimColor }}>
-              <span style={{
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12,
-              }}>
-                {mode}
-              </span>
-              <span
-                className="material-symbols-rounded"
-                style={{
-                  fontSize: 18,
-                  color: dimColor,
-                  fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                {mode === "dark" ? "light_mode" : "dark_mode"}
-              </span>
-            </span>
           </div>
 
           {/* ── Brew defaults — starting state of every fresh swipe seed ── */}

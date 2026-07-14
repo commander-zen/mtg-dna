@@ -1,10 +1,10 @@
 import { useTheme } from "../theme/ThemeContext";
 
 export default function SectionHeader({ label }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
-  const color       = mode === "light" ? `${theme.ink}8c`   : `${theme.white}66`;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
+  const color       = `${theme.white}66`;
+  const borderColor = theme.muted;
 
   return (
     <div style={{

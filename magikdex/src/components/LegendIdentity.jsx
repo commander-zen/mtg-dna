@@ -13,18 +13,18 @@ import { CATEGORY_META } from "../lib/wrec.js";
 // (Change v4 — replaces the old name/type/mana/deck field stack). Fills its
 // pane height with no internal scroll.
 export default function LegendIdentity({ legend }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
   const [oracleCard, setOracleCard] = useState(null);
   const [decks, setDecks] = useState(legend.decks ?? []);
   // WREC composition of the selected deck — the readout IS the deck's role
   // coverage now. Fetched per selected deck; untagged/empty decks read zeros.
   const [tagRows, setTagRows] = useState([]);
 
-  const dimColor    = mode === "light" ? theme.muted : theme.dim;
-  const textColor   = mode === "light" ? theme.ink   : theme.white;
-  const ruleColor   = mode === "light" ? theme.gold  : theme.amber;
-  const trackColor  = mode === "light" ? theme.border : theme.surface;
-  const plateBg     = mode === "light" ? theme.paper : theme.surface;
+  const dimColor    = theme.dim;
+  const textColor   = theme.white;
+  const ruleColor   = theme.amber;
+  const trackColor  = theme.surface;
+  const plateBg     = theme.surface;
 
   // Cache-first (memoized) lookup — this used to hit live api.scryfall.com on
   // every legend select, which made the detail pane's sprite the slowest thing

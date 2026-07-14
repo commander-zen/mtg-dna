@@ -4,11 +4,11 @@ import { SEARCH_CHIPS } from "../data/searchChips";
 // Guided-search chip layer — controlled by the parent, which owns selection
 // state so it can fold selected chips' tags into the compiled search query.
 export default function SearchChips({ selected, onToggle }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
-  const dimColor     = mode === "light" ? theme.muted : theme.dim;
-  const accentColor  = mode === "light" ? theme.gold  : theme.amber;
-  const borderColor  = mode === "light" ? theme.border : theme.muted;
+  const dimColor     = theme.dim;
+  const accentColor  = theme.amber;
+  const borderColor  = theme.muted;
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

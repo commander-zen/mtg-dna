@@ -1,9 +1,9 @@
 import { useTheme } from "../theme/ThemeContext";
 
 export default function TeaserCard({ accent, name, desc }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
-  const descColor = mode === "light" ? `${theme.ink}99` : `${theme.white}80`;
+  const descColor = `${theme.white}80`;
 
   return (
     <div style={{

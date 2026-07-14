@@ -47,7 +47,7 @@ function saveBoxOrder(list) {
 const GATE_SCRIM = "rgba(10,14,26,0.55)";
 
 export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSignal, activeId }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
   const [legends, setLegends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [identityFailed, setIdentityFailed] = useState(new Set());
@@ -85,11 +85,11 @@ export default function LegendBox({ onSelectLegend, onLegendsLoaded, reloadSigna
   }
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const dimColor    = mode === "light" ? theme.muted : theme.dim;
-  const textColor   = mode === "light" ? theme.ink   : theme.white;
-  const ringColor   = mode === "light" ? theme.gold  : theme.amber;
-  const borderColor = mode === "light" ? theme.border : theme.muted;
-  const slotBg      = theme.paper ?? theme.surface ?? "transparent";
+  const dimColor    = theme.dim;
+  const textColor   = theme.white;
+  const ringColor   = theme.amber;
+  const borderColor = theme.muted;
+  const slotBg      = theme.surface;
 
   async function loadLegends() {
     const { data, error } = await supabase

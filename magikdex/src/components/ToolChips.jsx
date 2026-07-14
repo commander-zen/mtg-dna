@@ -3,27 +3,18 @@ import { useTheme } from "../theme/ThemeContext";
 const TIERS = ["S", "A", "B"];
 
 const TIER_COLORS = {
-  light: {
-    S: "#c8960c",
-    A: "#1a141070",
-    B: "#1a141040",
-  },
-  dark: {
-    S: "#c8860a",
-    A: "#7ab89a",
-    B: "#2e3e34",
-  },
+  S: "#c8860a",
+  A: "#7ab89a",
+  B: "#2e3e34",
 };
 
 export default function ToolChips({ tools }) {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
-  const nameColor  = mode === "light" ? theme.ink               : theme.white;
-  const descColor  = mode === "light" ? `${theme.ink}99`        : `${theme.white}60`;
-  const tierColor  = mode === "light" ? `${theme.ink}50`        : theme.muted;
-  const divider    = mode === "light" ? `${theme.ink}15`        : theme.border;
-
-  const tierColors = TIER_COLORS[mode];
+  const nameColor  = theme.white;
+  const descColor  = `${theme.white}60`;
+  const tierColor  = theme.muted;
+  const divider    = theme.border;
 
   // Entries without a tier render first, above the tier groupings,
   // with the same row treatment and no group heading.
@@ -112,7 +103,7 @@ export default function ToolChips({ tools }) {
               fontFamily: "'Noto Sans Mono', monospace",
               fontSize: 11,
               fontWeight: 500,
-              color: tierColors[tier],
+              color: TIER_COLORS[tier],
               letterSpacing: "0.04em",
             }}>
               {tier}

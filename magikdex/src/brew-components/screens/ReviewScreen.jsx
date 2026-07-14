@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getCardData, getCardDataBatch, getCardImage, formatManaCost } from "../../lib/scryfall.js";
+import { getCardData, getCardDataBatch, getCardImage } from "../../lib/scryfall.js";
 import WrecBand, { WREC_CHIPS, LABEL_BY_TAG, WrecIcon, WREC_CHIP_COLORS } from "../../components/WrecBand.jsx";
 
 // Change 14 — how far left a decklist row must be dragged to commit a delete.
@@ -16,17 +16,6 @@ const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 // WREC_CHIPS / LABEL_BY_TAG now live in the shared WrecBand (canonical taxonomy);
 // imported above so the composition band and the per-row tag chips share one list.
 
-// Type-line display rule (mirrors LegendIdentity): every legal commander is a
-// "Legendary Creature — X", so the lead words are dead weight; show the subtypes
-// after the em dash. Non-creatures (planeswalker/Background) keep the full line
-// so nothing reads blank.
-function displayType(typeLine) {
-  if (!typeLine) return "";
-  return (/creature/i.test(typeLine) && typeLine.includes("—"))
-    ? (typeLine.split("—")[1]?.trim() || typeLine)
-    : typeLine;
-}
-
 // Oracle text, DFC-aware: join both faces so the user judges the whole card.
 function oracleOf(card) {
   if (!card) return "";
@@ -34,11 +23,6 @@ function oracleOf(card) {
   if (card.card_faces?.length)
     return card.card_faces.map(f => f.oracle_text).filter(Boolean).join("\n\n//\n\n");
   return "";
-}
-
-// Mana cost, DFC-aware — front face carries the cast cost.
-function manaOf(card) {
-  return formatManaCost(card?.mana_cost ?? card?.card_faces?.[0]?.mana_cost);
 }
 
 // Review the accumulated swipe results before saving. Purely presentational —
@@ -494,10 +478,6 @@ export default function ReviewScreen({
             const autoTags = cardTags?.[key]?.autoTags ?? [];
             const expanded = expandedKey === key;
             const card = cardData[name];               // undefined | null | object
-            const resolved = card !== undefined;       // a lookup has come back
-            const unavailable = resolved && card === null;
-            const type = card ? displayType(card.type_line) : "";
-            const mana = card ? manaOf(card) : "";
             const oracle = card ? oracleOf(card) : "";
             return (
               <div key={name}>
@@ -536,47 +516,19 @@ export default function ReviewScreen({
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {/* Vault spec §3 — row hierarchy: the NAME is the row (Zilla
-                      600, primary ink); the type line is quiet context under
-                      it; the mana cost moves out of the subline to a right-
-                      aligned amber badge so the eye can scan costs down one
-                      column. A name that won't resolve says so rather than
-                      reading as a blank/broken row. */}
+                  {/* Vault UAT item 4 — the NAME is the whole row (Zilla 600,
+                      primary ink): type line and cost badge are gone; the WREC
+                      icon chips carry the remaining context. */}
                   <span style={{
                     flex: 1, minWidth: 0,
-                    display: "flex", flexDirection: "column", gap: 2,
-                  }}>
-                    <span style={{
-                      fontFamily: "'Zilla Slab', serif",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      lineHeight: 1.15,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}>{name}</span>
-                    {unavailable ? (
-                      <span style={{
-                        fontFamily: "'Noto Sans Mono', monospace",
-                        fontSize: 11,
-                        color: "var(--muted)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}>card data unavailable</span>
-                    ) : type ? (
-                      <span style={{
-                        fontFamily: "'Noto Sans Mono', monospace",
-                        fontSize: 11,
-                        color: "var(--muted)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}>
-                        {type.toLowerCase()}
-                      </span>
-                    ) : null}
-                  </span>
+                    fontFamily: "'Zilla Slab', serif",
+                    fontWeight: 600,
+                    fontSize: 15,
+                    lineHeight: 1.15,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>{name}</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                     {/* Vault spec §4 — collapsed tags are icon CHIPS (icon =
                         exact category, color = family), replacing the anonymous
@@ -616,17 +568,6 @@ export default function ReviewScreen({
                     {quantity > 1 && (
                       <span style={{ color: "var(--muted)" }}>×{quantity}</span>
                     )}
-                    {/* Cost badge — right-aligned amber mono (reference HTML:
-                        unbracketed). Fixed min width keeps the cost column
-                        aligned; lands render it empty. */}
-                    <span style={{
-                      fontFamily: "'Noto Sans Mono', monospace",
-                      fontWeight: 500,
-                      fontSize: 13,
-                      color: "var(--primary)",
-                      minWidth: 34,
-                      textAlign: "right",
-                    }}>{unavailable ? "" : mana}</span>
                   </div>
                 </div>
                 </div>

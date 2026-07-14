@@ -488,7 +488,12 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       // on its live review, not the swipe carousel. The queue still seeds in
       // the background (excluding everything already in the deck) so review's
       // back arrow can drop straight into "continue brewing".
-      if (session.startView === "review") {
+      // Land on review when opened as a deck door OR when the last persisted
+      // coarse view was review/hand (UAT batch 2, item 5 — resume where you
+      // left off after a background reload); otherwise resume the swipe queue.
+      const resumeToReview = session.startView === "review"
+        || persisted?.view === "review" || persisted?.view === "hand";
+      if (resumeToReview) {
         setBrewView("review");
         await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted, { setView: false });
       } else {
@@ -666,10 +671,13 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     // search) rather than resuming a one-off search — the default stay "home".
     // Default seeds ("" / "-t:land") and wrec: gap-fill markers still persist.
     if (!isDefaultSeedQuery(query) && !wrecQueryCategory(query)) return;
+    // `view` is the coarse brew view (UAT batch 2, item 5) so a background
+    // reload resumes review/hand where it was, not just the swipe queue.
     saveBrewSession(session.legend.id, {
       query, narrow: stackNarrow, order: swipeOrder, dir: swipeDir, index: swipeIndex,
+      view: brewView,
     });
-  }, [session, query, stackNarrow, swipeOrder, swipeDir, swipeIndex, swipeCards.length]);
+  }, [session, query, stackNarrow, swipeOrder, swipeDir, swipeIndex, swipeCards.length, brewView]);
 
   // Warm the upcoming card ART off-swipe (Ben's load-time complaint): the
   // queue DATA already seeds silently in the background when the deck list

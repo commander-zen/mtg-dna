@@ -7,9 +7,41 @@ import { supabase } from "./lib/supabase.js";
 // One concern: the Box is the root and the only home. There are no tabs — the
 // root is a single scrolling surface (Home), and brewing opens Brew as a
 // full-screen takeover over it.
+
+// UAT batch 2, item 5 — the active brew session is persisted so backgrounding
+// (which reloads the Capacitor WebView) resumes the session instead of dumping
+// to Home. This holds only the ROUTE (which legend's session is open); the
+// in-session position — swipe index, decklist, coarse view — resumes from
+// Brew's own per-legend record. Same 30-day TTL as that record.
+const ACTIVE_SESSION_KEY = "magikdex-active-session";
+const ACTIVE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function loadActiveSession() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s?.legend?.id || typeof s.lastActive !== "number" ||
+        Date.now() - s.lastActive > ACTIVE_SESSION_TTL_MS) {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+      return null;
+    }
+    return s;
+  } catch { return null; }
+}
+
+function saveActiveSession(sess) {
+  try {
+    if (sess) localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({ ...sess, lastActive: Date.now() }));
+    else localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch { /* best-effort — resume just falls back to Home */ }
+}
+
 export default function App() {
   const { theme } = useTheme();
-  const [brewSession, setBrewSession] = useState(null);
+  // Restore a persisted session synchronously so the first paint is already the
+  // session (no Home flash) when returning from the background.
+  const [brewSession, setBrewSession] = useState(loadActiveSession);
   // Bumped when a brew session ends so the Box surface re-reads deck totals.
   const [reloadSignal, setReloadSignal] = useState(0);
   // Invisible sign-in: every visitor gets an anonymous Supabase account on
@@ -33,10 +65,13 @@ export default function App() {
   }, []);
 
   function handleLaunchBrew(legend, deck, opts) {
-    setBrewSession({ legend, deckId: deck?.id ?? null, startView: opts?.startView ?? null });
+    const sess = { legend, deckId: deck?.id ?? null, startView: opts?.startView ?? null };
+    saveActiveSession(sess);
+    setBrewSession(sess);
   }
 
   function handleBrewSessionDone() {
+    saveActiveSession(null);
     setBrewSession(null);
     setReloadSignal(s => s + 1);
   }

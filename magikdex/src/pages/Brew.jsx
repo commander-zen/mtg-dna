@@ -1354,7 +1354,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => setBrewView("review")}
-            onReview={session ? () => enterHandMode() : undefined}
             onSearchMore={() => setBrewView("review")}
             commanderCard={session
               ? { name: session.legend.name, art: session.legend.image_uri }

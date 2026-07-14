@@ -34,7 +34,7 @@ export default function SwipeScreen({
   cards, pile, onPileChange,
   maybeboard, onMaybeboardChange,
   decklist = [], onDecklistChange,
-  onGoToPile, onReview, onSearchMore, commanderCard,
+  onGoToPile, onSearchMore, commanderCard,
   initialIndex, onIndexChange,
   swipeOrder = "name", swipeDir = "desc", onSortChange,
   onCardCommit, reconnecting,
@@ -91,6 +91,9 @@ export default function SwipeScreen({
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [imgError,     setImgError]     = useState(false);
   const [flipped,      setFlipped]      = useState(false);
+  // UAT 8/9 — how many swipe gestures (browse or decide) this session; the
+  // gesture reminder fades for good at 5, when the hands have learned it.
+  const [swipeCount,   setSwipeCount]   = useState(0);
 
   const didMountRef       = useRef(false);
   const dragStartRef      = useRef(null);
@@ -160,6 +163,7 @@ export default function SwipeScreen({
 
   function browseNext() {
     if (animOut || animBrowse || done) return;
+    setSwipeCount(c => c + 1);
     setAnimBrowse("next");
     haptic(4);
     setOffset(-getCardPx());
@@ -171,6 +175,7 @@ export default function SwipeScreen({
 
   function browsePrev() {
     if (animOut || animBrowse || done || idx === 0) { setOffset(0); return; }
+    setSwipeCount(c => c + 1);
     setAnimBrowse("prev");
     haptic(4);
     setOffset(getCardPx());
@@ -213,6 +218,7 @@ export default function SwipeScreen({
   // Flick down — maybe board
   function doMaybe() {
     if (!card || animOut || animBrowse || done) return;
+    setSwipeCount(c => c + 1);
     if (handMode) return handMaybe();
     setAnimOut("down");
     haptic(8);
@@ -231,6 +237,7 @@ export default function SwipeScreen({
   // Flick up — straight to the decklist (mainboard)
   function doDecklist() {
     if (!card || animOut || animBrowse || done) return;
+    setSwipeCount(c => c + 1);
     if (handMode) return handCut();
     setAnimOut("up");
     haptic(14);
@@ -708,44 +715,25 @@ export default function SwipeScreen({
             }}
           >UNDO</button>
         )}
+        {/* Vault UAT item 6 — the sort entry is a spyglass, not the active
+            order's text label (which read as a link out to EDHREC). Icon only;
+            the dropdown below still names and toggles the orders. */}
         {!handMode && (
         <button
           onClick={e => { e.stopPropagation(); setSortMenuOpen(o => !o); }}
+          aria-label="Search and sort the stack"
           style={{
-            minHeight: 44, flexShrink: 0,
+            minHeight: 44, minWidth: 44, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "3px 10px", borderRadius: 4,
-            border: "1px solid rgba(255,255,255,0.15)",
-            background: "rgba(0,0,0,0.5)",
-            color: "rgba(255,255,255,0.4)",
-            fontFamily: "'Noto Sans', sans-serif",
-            fontSize: 10, letterSpacing: 1, cursor: "pointer", lineHeight: 1,
+            padding: 0, border: "none",
+            background: "transparent",
+            color: "rgba(255,255,255,0.5)",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
           }}
         >
-          {SORT_OPTIONS.find(o => o.value === swipeOrder)?.label ?? "SORT"}
-          {/* EDHREC is a fixed rank — the asc/desc arrow only applies to
-              NAME/CMC, where the user actually toggles direction. */}
-          {swipeOrder !== "edhrec" && ` ${swipeDir === "asc" ? "↑" : "↓"}`}
+          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
         </button>
         )}
-        <button
-          onClick={onGoToPile}
-          aria-label="Done — open deck list"
-          style={{
-            minHeight: 44, flexShrink: 0,
-            display: "flex", alignItems: "center", gap: 4,
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 12,
-            color: "var(--primary)",
-            background: "transparent", border: "none",
-            padding: "0 8px",
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span style={{ letterSpacing: "0.06em" }}>done</span>
-          <span style={{ color: "var(--muted)" }}>({decklist.length}·{maybeboard.length})</span>
-        </button>
       </div>
 
       {/* Persistent filter chip (Change 3) — gold-bordered, names the active
@@ -804,7 +792,10 @@ export default function SwipeScreen({
               onClick={openQueryEditor}
               aria-label="Edit the search query for this stack"
               style={{
-                alignSelf: "flex-start", maxWidth: "100%",
+                // Shares the band with the gesture reminder (UAT 8) — cap the
+                // chip while the reminder shows; full width once it fades.
+                alignSelf: "flex-start",
+                maxWidth: swipeCount >= 5 ? "100%" : "calc(100% - 210px)",
                 minHeight: 44,
                 display: "flex", alignItems: "center", gap: 6,
                 background: "rgba(0,0,0,0.55)",
@@ -894,6 +885,28 @@ export default function SwipeScreen({
               {queryMsg}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Gesture reminder (UAT 8/9) — lives above the card now, in the header
+          band's right side (the query chip owns the left; it hides while the
+          chip's editor is open). Fades for good after 5 swipe gestures this
+          session — trained hands don't need it. */}
+      {!done && !editingQuery && (
+        <div style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 48px)",
+          right: 8, zIndex: 3,
+          minHeight: 44,
+          display: "flex", alignItems: "center",
+          fontFamily: "'Noto Sans Mono', monospace",
+          fontSize: 11,
+          color: "var(--muted)",
+          pointerEvents: "none",
+          opacity: swipeCount >= 5 ? 0 : 1,
+          transition: "opacity 600ms ease",
+        }}>
+          {handMode ? "← browse →  ↑ cut  ↓ maybe" : "← browse →  ↑ mainboard  ↓ maybe"}
         </div>
       )}
 
@@ -1051,13 +1064,12 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Bottom controls (Change 11) — BACK bottom-left (→ the deck list, the
-            swipe's parent in the ladder), REVIEW bottom-right (enter the
-            flip-your-deck mode); gesture hint between. Home is gone: the
-            back-ladder (swipe → deck list → Box) replaces it. In review/flip
-            mode the right slot is empty (you're already reviewing). The old
-            filter button is gone too — filtering is now the editable query chip
-            (Change 10). ── */}
+      {/* ── Bottom controls (Change 11 / UAT 7) — BACK bottom-left (→ the deck
+            list, the swipe's parent in the ladder), DONE bottom-right (also →
+            the deck list; the one "I'm finished here" verb, both modes). Home
+            is gone: the back-ladder (swipe → deck list → Box) replaces it. The
+            old filter button is gone too — filtering is now the editable query
+            chip (Change 10). ── */}
       <div style={{
         position: "absolute",
         left: 0, right: 0,
@@ -1086,44 +1098,25 @@ export default function SwipeScreen({
           }}>back</span>
         </button>
 
-        {/* Middle — gesture hint */}
-        <div style={{
-          flex: 1, minWidth: 0,
-          textAlign: "center",
-          fontFamily: "'Noto Sans Mono', monospace",
-          fontSize: 11,
-          color: "var(--muted)",
-          whiteSpace: "nowrap",
-          overflow: "hidden", textOverflow: "ellipsis",
-          pointerEvents: "none",
-        }}>
-          {!done && (handMode ? "← browse →  ↑ cut  ↓ maybe" : "← browse →  ↑ mainboard  ↓ maybe")}
-        </div>
+        <div style={{ flex: 1 }} />
 
-        {/* REVIEW — bottom-right, ≥44px, enters flip-your-deck mode. Hidden in
-            review/flip mode itself (you're already there → empty spacer). */}
-        {!handMode ? (
-          <button
-            onClick={onReview}
-            aria-label="Review — flip through your deck"
-            style={{
-              minHeight: 44, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-              background: "rgba(0,0,0,0.4)", border: "none",
-              padding: "0 10px",
-              color: "rgba(255,255,255,0.75)",
-              cursor: "pointer", WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <span style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 11, letterSpacing: "0.08em",
-            }}>review</span>
-            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>back_hand</span>
-          </button>
-        ) : (
-          <div style={{ width: 44, flexShrink: 0 }} />
-        )}
+        {/* DONE — bottom-right (UAT 7/9): exits the swipe back to the deck
+            list, in brew and review/flip mode alike. No counts. The gesture
+            reminder moved above the card (UAT 8). */}
+        <button
+          onClick={onGoToPile}
+          aria-label="Done — back to deck list"
+          style={{
+            minHeight: 44, flexShrink: 0,
+            display: "flex", alignItems: "center",
+            background: "rgba(0,0,0,0.4)", border: "none",
+            padding: "0 12px",
+            color: "var(--primary)",
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 12, letterSpacing: "0.08em",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >done</button>
       </div>
 
       {/* ── Commander card overlay — tap the commander bar to open, tap

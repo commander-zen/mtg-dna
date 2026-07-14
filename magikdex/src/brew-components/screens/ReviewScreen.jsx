@@ -1244,8 +1244,9 @@ export default function ReviewScreen({
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
               back
             </button>
-            {/* Flip-deck REVIEW entry (renamed hand → review in Change 15),
-                bottom-right. Only when the deck has cards to flip through. */}
+            {/* Bottom-right DONE (UAT 7) — "done editing the list": enters the
+                review/flip pass. Same slot as the swipe screen's done, one
+                thumb position app-wide. Only when the deck has cards. */}
             {onHand && totalCards > 0 && (
               <button
                 onClick={() => onHand(
@@ -1254,12 +1255,12 @@ export default function ReviewScreen({
                   buildDeckGroups(groups.decklist, view, (n) => cardData[n])
                     .flatMap(g => g.items.map(it => it.name))
                 )}
-                aria-label="Review — flip through your deck"
+                aria-label="Done — review your deck"
                 style={{
                   minHeight: 44,
-                  display: "flex", alignItems: "center", gap: 6,
+                  display: "flex", alignItems: "center",
                   background: "transparent", border: "none",
-                  color: "var(--text)",
+                  color: "var(--primary)",
                   fontFamily: "'Noto Sans Mono', monospace",
                   fontSize: 12, letterSpacing: "0.08em",
                   padding: "0 10px",
@@ -1267,8 +1268,7 @@ export default function ReviewScreen({
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>back_hand</span>
-                review
+                done
               </button>
             )}
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getCardData, getCardDataBatch, getCardImage, formatManaCost } from "../../lib/scryfall.js";
-import WrecBand, { WREC_CHIPS, LABEL_BY_TAG } from "../../components/WrecBand.jsx";
+import WrecBand, { WREC_CHIPS, LABEL_BY_TAG, WrecIcon, WREC_CHIP_COLORS } from "../../components/WrecBand.jsx";
 
 // Change 14 — how far left a decklist row must be dragged to commit a delete.
 const ROW_DELETE_AT = 88;
@@ -623,27 +623,39 @@ export default function ReviewScreen({
                     ) : null}
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                    {/* Collapsed tags read as quiet DOTS, not text — the auto
-                        tags put amber labels on nearly every row and the list
-                        got loud. Filled dot = user tag, hollow = auto (same
-                        split as the chips); tap the row for the real chips. */}
+                    {/* Vault spec §4 — collapsed tags are icon CHIPS (icon =
+                        exact category, color = family), replacing the anonymous
+                        dots that read as noise without a legend. Max two + a +N
+                        overflow so tagging density can't break row height.
+                        Dashed border = auto-suggested, solid = user's (same
+                        split as the expanded tag grid). Untagged rows render
+                        nothing — never an empty placeholder. */}
                     {!expanded && tags.length > 0 && (
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {tags.map(t => {
+                        {tags.slice(0, 2).map(t => {
                           const auto = autoTags.includes(t);
+                          const c = WREC_CHIP_COLORS[t];
                           return (
                             <span
                               key={t}
                               title={LABEL_BY_TAG[t] ?? t}
                               style={{
-                                width: 6, height: 6,
-                                borderRadius: "50%",
-                                border: "1px solid var(--primary)",
-                                background: auto ? "transparent" : "var(--primary)",
+                                width: 22, height: 22,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                border: `1px ${auto ? "dashed" : "solid"} ${c?.border ?? "var(--muted)"}`,
+                                background: c?.bg ?? "transparent",
                               }}
-                            />
+                            >
+                              <WrecIcon tag={t} />
+                            </span>
                           );
                         })}
+                        {tags.length > 2 && (
+                          <span style={{
+                            fontFamily: "'Noto Sans Mono', monospace",
+                            fontSize: 11, color: "var(--muted)",
+                          }}>+{tags.length - 2}</span>
+                        )}
                       </span>
                     )}
                     {quantity > 1 && (

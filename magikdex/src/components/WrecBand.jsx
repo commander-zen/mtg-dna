@@ -26,6 +26,53 @@ export const WREC_CHIPS = [
 ];
 export const LABEL_BY_TAG = Object.fromEntries(WREC_CHIPS.map(c => [c.tag, c.label]));
 
+// Vault spec §4 — the icon-chip vocabulary. Icon carries the EXACT category,
+// color carries the FAMILY: warm amber = build yourself up (ramp, card
+// advantage), cool green = stop the table (disruption, mass disruption),
+// standout red = your payoff (plan — user-assigned only, never auto-derived).
+// Geometry lifted verbatim from the design reference (wrec-icons-preview.html):
+// stroke-based 24×24 glyphs, per-glyph stroke weight, legible at 13px in-row.
+const WREC_GLYPHS = {
+  // double chevron up — acceleration, "get ahead of the curve"
+  "ramp":            { sw: 2.4, circles: [], paths: ["M5 13 L12 6 L19 13", "M5 18 L12 11 L19 18"] },
+  // bold plus — gain, not selection
+  "card-advantage":  { sw: 2.8, circles: [], paths: ["M12 5 L12 19 M5 12 L19 12"] },
+  // circle + slash — negate ONE (covers counters, deliberately not a sword)
+  "disruption":      { sw: 2.4, circles: [{ cx: 12, cy: 12, r: 7.5 }], paths: ["M6.7 6.7 L17.3 17.3"] },
+  // three targets in a triangle, one slash through the cluster — the whole table
+  "mass-disruption": { sw: 2,   circles: [{ cx: 12, cy: 6.5, r: 2.9 }, { cx: 6.5, cy: 16, r: 2.9 }, { cx: 17.5, cy: 16, r: 2.9 }], paths: ["M4 19.5 L20 5.5"] },
+  // planted flag — yours
+  "plan":            { sw: 2.2, circles: [], paths: ["M7 4 L7 20", "M7 5 L18 5 L14.5 9 L18 13 L7 13"] },
+};
+
+export const WREC_CHIP_COLORS = {
+  "ramp":            { stroke: "#e8a020", border: "#5a4a1e", bg: "#1a1608" },
+  "card-advantage":  { stroke: "#d4a838", border: "#5a4a1e", bg: "#1a1608" },
+  "disruption":      { stroke: "#7ab89a", border: "#2c4a3c", bg: "#0c1712" },
+  "mass-disruption": { stroke: "#5a9d80", border: "#2c4a3c", bg: "#0c1712" },
+  "plan":            { stroke: "#c0392b", border: "#4a2420", bg: "#170a08" },
+};
+
+export function WrecIcon({ tag, size = 13 }) {
+  const g = WREC_GLYPHS[tag];
+  if (!g) return null;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size} height={size}
+      fill="none"
+      stroke={WREC_CHIP_COLORS[tag]?.stroke}
+      strokeWidth={g.sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {g.circles.map((c, i) => <circle key={i} cx={c.cx} cy={c.cy} r={c.r} />)}
+      {g.paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
 export default function WrecBand({ counts, accent, muted, text, activeTag = null, onTapTag }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)" }}>

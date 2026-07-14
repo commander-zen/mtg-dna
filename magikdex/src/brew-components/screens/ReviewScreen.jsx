@@ -227,10 +227,15 @@ export default function ReviewScreen({
   // null = name couldn't resolve (show "card data unavailable"), object = card.
   const [cardData, setCardData] = useState({});
   const [copied, setCopied] = useState(false);
-  // WREC filter — tapping a non-zero category in the composition band narrows
-  // the list to that category's cards; tapping it again clears. One category
-  // at a time (the band is a composition readout, not a query builder).
+  // WREC filter — tapping a category in the composition panel narrows the list
+  // to that category's cards; tapping it again clears. One category at a time
+  // (the panel is a composition readout, not a query builder).
   const [wrecFilter, setWrecFilter] = useState(null);
+  // Vault-spec section 1 — the five-cell band is secondary info, collapsed
+  // behind a one-line summary chip by default; tapping the chip discloses the
+  // full band inline (not a new screen). Picking a category applies the filter
+  // and re-collapses so the narrowed list is immediately visible.
+  const [wrecOpen, setWrecOpen] = useState(false);
   // Sort/group view controls (Change 6). Default: group by type, sort a–z
   // (Moxfield-familiar). Lazily seeded from the per-deck saved pref, then
   // persisted on change. Orthogonal to the WREC band — this organizes the list,
@@ -437,6 +442,13 @@ export default function ReviewScreen({
     }
     return { tag, label, n };
   });
+  // Collapsed-chip count: cards carrying ≥1 tag (by quantity, same basis as the
+  // per-category counts — but NOT their sum, which double-counts multi-tag cards).
+  let taggedTotal = 0;
+  for (const k in (cardTags ?? {})) {
+    const e = cardTags[k];
+    if (e?.tags?.length) taggedTotal += (e.quantity ?? 1);
+  }
 
   const inputStyle = {
     width: "100%",
@@ -892,10 +904,10 @@ export default function ReviewScreen({
           </div>
           )}
 
-          {/* WREC composition band — frozen with the anchor. Five EQUAL cells
-              (count over a micro label), no separators — the old inline
-              "LABEL n · LABEL n" run read as one busy string on device. A 0
-              stays dimmed (the dump-stat tell); non-zero cells filter on tap. */}
+          {/* WREC readout — collapsed to a one-line summary chip (Vault spec §1:
+              secondary info is deferred until requested). The chip names the
+              active filter when one is set, so a narrowed list is never
+              unexplained; tapping discloses the five-cell band inline. */}
           <div style={{
             maxWidth: 430,
             margin: "0 auto",
@@ -904,16 +916,50 @@ export default function ReviewScreen({
             paddingBottom: 4,
             borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
           }}>
-            {/* Shared WrecBand — tappable here (filters the list); zeros stay
-                dimmed but tappable (a zero IS the gap → empty filter + "add more"). */}
-            <WrecBand
-              counts={wrecCounts}
-              accent="var(--primary)"
-              muted="var(--muted)"
-              text="var(--text)"
-              activeTag={wrecFilter}
-              onTapTag={(tag) => { setWrecFilter(f => (f === tag ? null : tag)); setAddMoreError(null); }}
-            />
+            <button
+              onClick={() => setWrecOpen(o => !o)}
+              aria-label="WREC composition — show category counts"
+              aria-expanded={wrecOpen}
+              style={{
+                minHeight: 44,
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "transparent", border: "none", padding: "0 4px",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.06em",
+                cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span style={{ color: "var(--primary)" }}>WREC</span>
+              {wrecFilter ? (
+                <span style={{ color: "var(--primary)" }}>
+                  · {LABEL_BY_TAG[wrecFilter]} {wrecCounts.find(c => c.tag === wrecFilter)?.n ?? 0}
+                </span>
+              ) : (
+                <span style={{ color: "var(--muted)" }}>· {taggedTotal} tagged</span>
+              )}
+              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
+                {wrecOpen ? "expand_less" : "expand_more"}
+              </span>
+            </button>
+            {/* Disclosed band — the same shared WrecBand, still the filter door:
+                tapping a category applies the filter and re-collapses (the
+                narrowed list is the answer); tapping the active one clears.
+                Zeros stay dimmed but tappable (a zero IS the gap → empty
+                filter + "add more"). */}
+            {wrecOpen && (
+              <WrecBand
+                counts={wrecCounts}
+                accent="var(--primary)"
+                muted="var(--muted)"
+                text="var(--text)"
+                activeTag={wrecFilter}
+                onTapTag={(tag) => {
+                  setWrecFilter(f => (f === tag ? null : tag));
+                  setAddMoreError(null);
+                  setWrecOpen(false);
+                }}
+              />
+            )}
           </div>
         </div>
       )}

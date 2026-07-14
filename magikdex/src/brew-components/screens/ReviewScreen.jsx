@@ -1270,9 +1270,10 @@ export default function ReviewScreen({
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
               back
             </button>
-            {/* Bottom-right DONE (UAT 7) — "done editing the list": enters the
-                review/flip pass. Same slot as the swipe screen's done, one
-                thumb position app-wide. Only when the deck has cards. */}
+            {/* Bottom-right REVIEW (UAT batch 2, item 15) — enters the flip
+                pass, resuming at the last card viewed (Brew keeps the index).
+                Same slot as the swipe screen's done. Only when the deck has
+                cards. */}
             {onHand && totalCards > 0 && (
               <button
                 onClick={() => onHand(
@@ -1281,7 +1282,7 @@ export default function ReviewScreen({
                   buildDeckGroups(groups.decklist, view, (n) => cardData[n])
                     .flatMap(g => g.items.map(it => it.name))
                 )}
-                aria-label="Done — review your deck"
+                aria-label="Review — flip through your deck"
                 style={{
                   minHeight: 44,
                   display: "flex", alignItems: "center",
@@ -1294,7 +1295,7 @@ export default function ReviewScreen({
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                done
+                review
               </button>
             )}
           </div>

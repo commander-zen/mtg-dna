@@ -299,6 +299,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // through. Kept separate from swipeCards so it never touches the brew stack or
   // its persisted resume seed — hand mode is transient.
   const [handCards, setHandCards] = useState([]);
+  // Where the last review pass left off (UAT batch 2, item 15) — re-entering
+  // review resumes at that card instead of restarting; clamped on entry in
+  // case the deck shrank underneath it.
+  const [handIndex, setHandIndex] = useState(0);
   const [swipeOrder, setSwipeOrder] = useState("name");
   const [swipeDir, setSwipeDir]     = useState("asc");
   const [pile, setPile]             = useState([]);
@@ -840,6 +844,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const cards = names.map(n => data[n]).filter(Boolean);
       if (!cards.length) return;
       setHandCards(cards);
+      setHandIndex(i => Math.min(i, cards.length - 1));
       setBrewView("hand");
     } finally {
       setLoading(false);
@@ -1386,7 +1391,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             commanderCard={session
               ? { name: session.legend.name, art: session.legend.image_uri }
               : sessionLabel ? { name: sessionLabel } : null}
-            initialIndex={0}
+            initialIndex={handIndex}
+            onIndexChange={setHandIndex}
             swipeOrder={swipeOrder}
             swipeDir={swipeDir}
             reconnecting={reconnecting}

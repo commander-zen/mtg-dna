@@ -581,18 +581,25 @@ export default function ReviewScreen({
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
+                  {/* Vault spec §3 — row hierarchy: the NAME is the row (Zilla
+                      600, primary ink); the type line is quiet context under
+                      it; the mana cost moves out of the subline to a right-
+                      aligned amber badge so the eye can scan costs down one
+                      column. A name that won't resolve says so rather than
+                      reading as a blank/broken row. */}
                   <span style={{
                     flex: 1, minWidth: 0,
                     display: "flex", flexDirection: "column", gap: 2,
                   }}>
                     <span style={{
+                      fontFamily: "'Zilla Slab', serif",
+                      fontWeight: 600,
+                      fontSize: 15,
+                      lineHeight: 1.15,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                     }}>{name}</span>
-                    {/* Context subline — type (subtypes per the display rule) +
-                        mana, dimmed mono. A name that won't resolve says so
-                        rather than reading as a blank/broken row. */}
                     {unavailable ? (
                       <span style={{
                         fontFamily: "'Noto Sans Mono', monospace",
@@ -602,7 +609,7 @@ export default function ReviewScreen({
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                       }}>card data unavailable</span>
-                    ) : (type || mana) ? (
+                    ) : type ? (
                       <span style={{
                         fontFamily: "'Noto Sans Mono', monospace",
                         fontSize: 11,
@@ -611,7 +618,7 @@ export default function ReviewScreen({
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                       }}>
-                        {type.toLowerCase()}{type && mana ? "  ·  " : ""}{mana}
+                        {type.toLowerCase()}
                       </span>
                     ) : null}
                   </span>
@@ -642,6 +649,17 @@ export default function ReviewScreen({
                     {quantity > 1 && (
                       <span style={{ color: "var(--muted)" }}>×{quantity}</span>
                     )}
+                    {/* Cost badge — right-aligned amber mono (reference HTML:
+                        unbracketed). Fixed min width keeps the cost column
+                        aligned; lands render it empty. */}
+                    <span style={{
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontWeight: 500,
+                      fontSize: 13,
+                      color: "var(--primary)",
+                      minWidth: 34,
+                      textAlign: "right",
+                    }}>{unavailable ? "" : mana}</span>
                   </div>
                 </div>
                 </div>
@@ -989,7 +1007,7 @@ export default function ReviewScreen({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
                 onKeyDown={e => { if (e.key === "Enter") handleCardSearch(); }}
-                placeholder="add cards · name or scryfall syntax"
+                placeholder="search or add cards"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 readOnly={searchBusy}
                 style={{

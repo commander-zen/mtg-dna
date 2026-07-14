@@ -88,7 +88,10 @@ export default function SwipeScreen({
   const [dragging,     setDragging]     = useState(false);
   const [animOut,      setAnimOut]      = useState(null);
   const [animBrowse,   setAnimBrowse]   = useState(null);
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // UAT batch 2, items 18/19 — the top-right spyglass opens ONE panel that
+  // folds the old editable-query chip and the sort dropdown together: a
+  // full-width search field with the sort chips beneath it.
+  const [searchOpen,   setSearchOpen]   = useState(false);
   const [imgError,     setImgError]     = useState(false);
   const [flipped,      setFlipped]      = useState(false);
   // UAT 8/9 — how many swipe gestures (browse or decide) this session; the
@@ -423,27 +426,25 @@ export default function SwipeScreen({
     }
   }
 
-  // Editable query chip (Change 10) — the stack's identity is a tappable chip:
-  // a search stack shows its query, the default synergy stack shows a readable
-  // "edhrec · commander" label. Tapping opens an inline editor; submitting runs
-  // a fresh Scryfall search (onEditQuery → the parent's global search, which
-  // still ANDs commander-legality + this deck's color identity). So "editing the
-  // stack" is always editing a query, per Ben — the synergy default just starts
-  // that query from empty. Only for legend sessions (onEditQuery), never in the
-  // deck-flip review mode.
+  // Search-the-stack (Change 10, reworked in batch 2 items 18/19) — the spyglass
+  // opens a full-width field seeded with the current stack's query; submitting
+  // runs a fresh Scryfall search (onEditQuery → the parent's global search,
+  // which still ANDs commander-legality + this deck's color identity). The
+  // synergy default just starts that query from empty. Legend sessions only
+  // (onEditQuery); never in the deck-flip review mode.
   const searchStack = stackOrigin?.type === "search";
-  const queryLabel = searchStack
-    ? `search: ${stackOrigin.query}`
-    : `edhrec · ${commanderCard?.name ?? "commander"}`;
-  const [editingQuery, setEditingQuery] = useState(false);
   const [queryDraft, setQueryDraft]     = useState("");
   const [queryBusy, setQueryBusy]       = useState(false);
   const [queryMsg, setQueryMsg]         = useState(null);
 
-  function openQueryEditor() {
+  function openSearch() {
     setQueryDraft(searchStack ? stackOrigin.query : "");
     setQueryMsg(null);
-    setEditingQuery(true);
+    setSearchOpen(true);
+  }
+  function closeSearch() {
+    setSearchOpen(false);
+    setQueryMsg(null);
   }
   async function submitQuery() {
     const q = queryDraft.trim();
@@ -453,8 +454,8 @@ export default function SwipeScreen({
     const res = await onEditQuery?.(q);
     setQueryBusy(false);
     if (res && !res.ok) { setQueryMsg(res.message); return; }
-    // Success: the parent swapped in the new stack — collapse the editor.
-    setEditingQuery(false);
+    // Success: the parent swapped in the new stack — collapse the panel.
+    setSearchOpen(false);
     setQueryMsg(null);
   }
 
@@ -641,99 +642,210 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Commander bar — ONE header row (Ben's device-pass consolidation):
-            tappable commander anchor (art + name + count; tap = re-read the
-            full card) on the left, UNDO / SORT / DONE on the right. DONE
-            exits to the deck list (review). ── */}
+      {/* ── Header — the commander anchor + controls, OR (items 18/19) the
+            expanded search: the top-right spyglass swaps the whole bar for a
+            full-width search field (commander hidden) with the sort chips
+            beneath it. UNDO stays; DONE lives in the bottom bar. ── */}
       <div style={{
         position: "absolute",
         top: "env(safe-area-inset-top)",
         left: 0, right: 0,
         zIndex: 3,
-        display: "flex", alignItems: "center", gap: 4,
+        display: "flex", flexDirection: "column", gap: 8,
         padding: "6px 8px",
-        background: "transparent",
+        background: searchOpen ? "rgba(0,0,0,0.6)" : "transparent",
       }}>
-        <button
-          onClick={openCommander}
-          aria-label="Show commander card"
-          style={{
-            flex: 1, minWidth: 0, minHeight: 44,
-            display: "flex", alignItems: "center", gap: 8,
-            background: "transparent", border: "none",
-            padding: "0 4px", textAlign: "left",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          {commanderArt && (
-            <img
-              src={commanderArt}
-              alt=""
-              style={{
-                width: 34, height: 34, objectFit: "cover",
-                // corner mask matches the swipe card / review anchor
-                borderRadius: "5.5% / 4%", flexShrink: 0,
-              }}
-            />
-          )}
-          <span style={{ minWidth: 0 }}>
-            <span style={{
-              display: "block",
-              fontFamily: "'Zilla Slab', serif",
-              fontSize: 14,
-              color: "rgba(255,255,255,0.85)",
-              letterSpacing: "0.02em",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {searchOpen && onEditQuery ? (
+            // Item 18 — full-width search field in place of the commander bar.
+            <div style={{
+              flex: 1, minWidth: 0,
+              display: "flex", alignItems: "stretch",
+              background: "rgba(0,0,0,0.75)",
+              border: "1px solid var(--primary)",
             }}>
-              {commanderName ?? ""}
-            </span>
-            {subline && (
-              <span style={{
-                display: "block",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 10, letterSpacing: "0.1em",
-                color: "rgba(255,255,255,0.3)",
-                textTransform: "uppercase",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {subline}
-              </span>
-            )}
-          </span>
-        </button>
+              <input
+                type="text"
+                value={queryDraft}
+                autoFocus
+                onChange={e => setQueryDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") submitQuery();
+                  if (e.key === "Escape") closeSearch();
+                }}
+                placeholder="name or scryfall syntax"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+                readOnly={queryBusy}
+                style={{
+                  flex: 1, minWidth: 0, boxSizing: "border-box", minHeight: 44,
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.9)",
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 16,
+                  border: "none", padding: "0 10px", outline: "none",
+                }}
+              />
+              <button
+                onClick={submitQuery}
+                disabled={queryBusy || !queryDraft.trim()}
+                aria-label="Run search"
+                style={{
+                  flexShrink: 0, width: 44, minHeight: 44,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none",
+                  borderLeft: "1px solid rgba(56,189,248,0.4)",
+                  color: queryDraft.trim() ? "var(--primary)" : "var(--muted)",
+                  cursor: queryDraft.trim() ? "pointer" : "default",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{queryBusy ? "hourglass_empty" : "search"}</span>
+              </button>
+              <button
+                onClick={closeSearch}
+                aria-label="Close search"
+                style={{
+                  flexShrink: 0, width: 44, minHeight: 44,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none",
+                  borderLeft: "1px solid rgba(56,189,248,0.4)",
+                  color: "var(--muted)",
+                  cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>close</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={openCommander}
+                aria-label="Show commander card"
+                style={{
+                  flex: 1, minWidth: 0, minHeight: 44,
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "transparent", border: "none",
+                  padding: "0 4px", textAlign: "left",
+                  cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {commanderArt && (
+                  <img
+                    src={commanderArt}
+                    alt=""
+                    style={{
+                      width: 34, height: 34, objectFit: "cover",
+                      // corner mask matches the swipe card / review anchor
+                      borderRadius: "5.5% / 4%", flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span style={{ minWidth: 0 }}>
+                  <span style={{
+                    display: "block",
+                    fontFamily: "'Zilla Slab', serif",
+                    fontSize: 14,
+                    color: "rgba(255,255,255,0.85)",
+                    letterSpacing: "0.02em",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {commanderName ?? ""}
+                  </span>
+                  {subline && (
+                    <span style={{
+                      display: "block",
+                      fontFamily: "'Noto Sans Mono', monospace",
+                      fontSize: 10, letterSpacing: "0.1em",
+                      color: "rgba(255,255,255,0.3)",
+                      textTransform: "uppercase",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {subline}
+                    </span>
+                  )}
+                </span>
+              </button>
 
-        {history.length > 0 && !animOut && (
-          <button
-            onClick={doUndo}
-            style={{
-              minHeight: 44, minWidth: 44, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "transparent", border: "none",
-              color: "rgba(255,255,255,0.4)",
-              fontFamily: "'Noto Sans', sans-serif",
-              fontSize: 11, letterSpacing: 2, cursor: "pointer",
-              padding: "2px 6px",
-            }}
-          >UNDO</button>
+              {history.length > 0 && !animOut && (
+                <button
+                  onClick={doUndo}
+                  style={{
+                    minHeight: 44, minWidth: 44, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", border: "none",
+                    color: "rgba(255,255,255,0.4)",
+                    fontFamily: "'Noto Sans', sans-serif",
+                    fontSize: 11, letterSpacing: 2, cursor: "pointer",
+                    padding: "2px 6px",
+                  }}
+                >UNDO</button>
+              )}
+              {/* Items 18/19 — the spyglass opens the search+sort panel. */}
+              {!handMode && (onEditQuery || onSortChange) && (
+                <button
+                  onClick={openSearch}
+                  aria-label="Search and sort the stack"
+                  style={{
+                    minHeight: 44, minWidth: 44, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 0, border: "none",
+                    background: "transparent",
+                    color: "rgba(255,255,255,0.5)",
+                    cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Sort chips (item 19) — appear beneath the search field: NAME / CMC /
+            EDHREC, active one highlighted with its direction arrow; tapping the
+            active chip flips direction, tapping another switches order. */}
+        {searchOpen && !handMode && onSortChange && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {SORT_OPTIONS.map(opt => {
+              const active = swipeOrder === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => onSortChange?.(opt.value, active ? (swipeDir === "asc" ? "desc" : "asc") : swipeDir)}
+                  style={{
+                    minHeight: 44, padding: "0 12px",
+                    display: "flex", alignItems: "center", gap: 4,
+                    background: "transparent",
+                    border: `1px solid ${active ? "var(--primary)" : "rgba(255,255,255,0.18)"}`,
+                    color: active ? "var(--primary)" : "rgba(255,255,255,0.55)",
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.08em",
+                    cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {opt.label}
+                  {active && (
+                    <span className="material-symbols-rounded" style={{ fontSize: 14 }}>
+                      {swipeDir === "asc" ? "arrow_upward" : "arrow_downward"}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
-        {/* Vault UAT item 6 — the sort entry is a spyglass, not the active
-            order's text label (which read as a link out to EDHREC). Icon only;
-            the dropdown below still names and toggles the orders. */}
-        {!handMode && (
-        <button
-          onClick={e => { e.stopPropagation(); setSortMenuOpen(o => !o); }}
-          aria-label="Search and sort the stack"
-          style={{
-            minHeight: 44, minWidth: 44, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 0, border: "none",
-            background: "transparent",
-            color: "rgba(255,255,255,0.5)",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
-        </button>
+
+        {/* Search error/why, under the chips. */}
+        {searchOpen && queryMsg && (
+          <div style={{
+            background: "rgba(0,0,0,0.55)",
+            padding: "3px 8px",
+            fontFamily: "'Noto Sans Mono', monospace",
+            fontSize: 11, lineHeight: 1.4,
+            color: "rgba(255,255,255,0.7)",
+          }}>
+            {queryMsg}
+          </div>
         )}
       </div>
 
@@ -776,124 +888,11 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* Editable query chip (Change 10) — the stack identity, tappable to
-          re-query. Collapsed: the label + a pencil. Tapped: an inline Scryfall
-          search box (✓ submits, ✕ cancels). Legend sessions only, never in the
-          deck-flip review mode. Shares the filter chip's slot; only one of the
-          two is ever live (in-stack narrowing is unreachable in the current IA). */}
-      {onEditQuery && !handMode && !stackNarrow && (
-        <div style={{
-          position: "absolute",
-          top: "calc(env(safe-area-inset-top) + 48px)",
-          left: 8, right: 8, zIndex: 4,
-          display: "flex", flexDirection: "column", gap: 4,
-        }}>
-          {!editingQuery ? (
-            <button
-              onClick={openQueryEditor}
-              aria-label="Edit the search query for this stack"
-              style={{
-                // Shares the band with the gesture reminder (UAT 8) — cap the
-                // chip while the reminder shows; full width once it fades.
-                alignSelf: "flex-start",
-                maxWidth: swipeCount >= 5 ? "100%" : "calc(100% - 210px)",
-                minHeight: 44,
-                display: "flex", alignItems: "center", gap: 6,
-                background: "rgba(0,0,0,0.55)",
-                border: "1px solid var(--primary)",
-                padding: "0 10px",
-                cursor: "pointer", WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span style={{
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 10, letterSpacing: "0.08em",
-                color: "var(--primary)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {queryLabel}
-              </span>
-              <span className="material-symbols-rounded" style={{ fontSize: 15, color: "var(--primary)", flexShrink: 0 }}>edit</span>
-            </button>
-          ) : (
-            <div style={{
-              display: "flex", alignItems: "stretch",
-              background: "rgba(0,0,0,0.75)",
-              border: "1px solid var(--primary)",
-            }}>
-              <input
-                type="text"
-                value={queryDraft}
-                autoFocus
-                onChange={e => setQueryDraft(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") submitQuery();
-                  if (e.key === "Escape") { setEditingQuery(false); setQueryMsg(null); }
-                }}
-                placeholder="name or scryfall syntax"
-                autoComplete="off" autoCorrect="off" spellCheck={false}
-                readOnly={queryBusy}
-                style={{
-                  flex: 1, minWidth: 0, boxSizing: "border-box", minHeight: 44,
-                  background: "transparent",
-                  color: "rgba(255,255,255,0.9)",
-                  fontFamily: "'Noto Sans Mono', monospace",
-                  fontSize: 16,
-                  border: "none", padding: "0 10px", outline: "none",
-                }}
-              />
-              <button
-                onClick={submitQuery}
-                disabled={queryBusy || !queryDraft.trim()}
-                aria-label="Run search"
-                style={{
-                  flexShrink: 0, width: 44, minHeight: 44,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "none",
-                  borderLeft: "1px solid rgba(56,189,248,0.4)",
-                  color: queryDraft.trim() ? "var(--primary)" : "var(--muted)",
-                  cursor: queryDraft.trim() ? "pointer" : "default",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{queryBusy ? "hourglass_empty" : "search"}</span>
-              </button>
-              <button
-                onClick={() => { setEditingQuery(false); setQueryMsg(null); }}
-                aria-label="Cancel"
-                style={{
-                  flexShrink: 0, width: 44, minHeight: 44,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "none",
-                  borderLeft: "1px solid rgba(56,189,248,0.4)",
-                  color: "var(--muted)",
-                  cursor: "pointer", WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>close</span>
-              </button>
-            </div>
-          )}
-          {queryMsg && (
-            <div style={{
-              alignSelf: "flex-start", maxWidth: "100%",
-              background: "rgba(0,0,0,0.55)",
-              padding: "3px 8px",
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 11, lineHeight: 1.4,
-              color: "rgba(255,255,255,0.7)",
-            }}>
-              {queryMsg}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Gesture reminder (UAT 8/9; batch 2 item 16 centers it) — lives above
-          the card, horizontally centered (it hides while the query chip's
-          editor is open). Fades for good after 5 swipe gestures this session
-          — trained hands don't need it. */}
-      {!done && !editingQuery && (
+          the card, horizontally centered (it hides while the search panel is
+          open). Fades for good after 5 swipe gestures this session — trained
+          hands don't need it. */}
+      {!done && !searchOpen && (
         <div style={{
           position: "absolute",
           top: "calc(env(safe-area-inset-top) + 48px)",
@@ -908,45 +907,6 @@ export default function SwipeScreen({
           transition: "opacity 600ms ease",
         }}>
           {handMode ? "← browse →  ↑ cut  ↓ maybe" : "← browse →  ↑ deck  ↓ maybe"}
-        </div>
-      )}
-
-      {/* Sort dropdown */}
-      {sortMenuOpen && (
-        <div style={{
-          position: "absolute",
-          top: `calc(env(safe-area-inset-top) + 56px)`,
-          right: 20, zIndex: 10,
-          background: "#111",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: 10, overflow: "hidden",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.9)",
-          minWidth: 120,
-        }}>
-          {SORT_OPTIONS.map(opt => {
-            const active = swipeOrder === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  onSortChange?.(opt.value, active ? (swipeDir === "asc" ? "desc" : "asc") : swipeDir);
-                  setSortMenuOpen(false);
-                }}
-                style={{
-                  display: "flex", alignItems: "center", width: "100%",
-                  minHeight: 44,
-                  padding: "10px 14px",
-                  background: active ? "rgba(255,255,255,0.08)" : "transparent",
-                  border: "none",
-                  borderBottom: "1px solid rgba(255,255,255,0.05)",
-                  color: active ? "#ffffff" : "rgba(255,255,255,0.5)",
-                  fontFamily: "'Noto Sans', sans-serif",
-                  fontSize: 12, letterSpacing: 2,
-                  cursor: "pointer", textAlign: "left",
-                }}
-              >{opt.label}</button>
-            );
-          })}
         </div>
       )}
 

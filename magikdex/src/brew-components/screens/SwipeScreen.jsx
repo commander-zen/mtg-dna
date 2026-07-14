@@ -648,7 +648,7 @@ export default function SwipeScreen({
                 : handMode
                   ? (done
                       ? "deck flipped"
-                      : `hand: ${stackOrigin?.query ?? ""} · ${effectiveCards.length - idx} in deck`)
+                      : `review: ${stackOrigin?.query ?? ""} · ${effectiveCards.length - idx} in deck`)
                   : done
                     ? `${pile.length} kept`
                     : stackNarrow
@@ -953,7 +953,7 @@ export default function SwipeScreen({
           overflow: "hidden", textOverflow: "ellipsis",
           pointerEvents: "none",
         }}>
-          {!done && (handMode ? "← flip →  ↑ cut  ↓ maybe" : "← browse →  ↑ mainboard  ↓ maybe")}
+          {!done && (handMode ? "← browse →  ↑ cut  ↓ maybe" : "← browse →  ↑ mainboard  ↓ maybe")}
         </div>
 
         {/* REVIEW — bottom-right, ≥44px, enters flip-your-deck mode. Hidden in

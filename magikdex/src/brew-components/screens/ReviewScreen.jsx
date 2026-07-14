@@ -311,6 +311,13 @@ export default function ReviewScreen({
   const [cardSearch, setCardSearch] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchMsg, setSearchMsg] = useState(null);
+  // Change 10 — the search bar is TWO doors in one row: while it's empty and
+  // unfocused its right half reads "quick brew" (deal the synergy stack, onBrew);
+  // focus it (or type) and that half becomes a search-submit magnifier so a power
+  // user can pull an exact card / Scryfall query. searchFocused drives the swap.
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef(null);
+  const showQuickBrew = !searchFocused && !cardSearch.trim();
 
   async function handleCardSearch() {
     const q = cardSearch.trim();
@@ -834,32 +841,83 @@ export default function ReviewScreen({
         gap: 20,
       }}>
 
-        {/* Change 1 — add cards from all of Scryfall. Submitting builds a custom
-            swipe stack (commander-legal, in the deck's color identity, minus
-            what's already in the deck) and drops into the same swipe screen —
-            it is never a results list. Sits below the frozen counter band and
-            above the DECKLIST header; clearing it before submit is a no-op. */}
-        {live && onDeckSearch && (
+        {/* Change 10 — the two-door bar. One row: a text field on the left, and a
+            right half that is EITHER "quick brew" (deal the synergy stack for this
+            legend, onBrew) while empty+unfocused, OR a search-submit magnifier
+            once focused/typed (build a custom swipe stack from all of Scryfall —
+            commander-legal, in the deck's color identity, minus what's in the
+            deck — and drop into the same swipe screen; never a results list). This
+            folds the old middle "brew" nav button INTO the bar. */}
+        {live && (onDeckSearch || onBrew) && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <input
-              type="text"
-              value={cardSearch}
-              onChange={e => setCardSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleCardSearch(); }}
-              placeholder="add cards · name or scryfall syntax"
-              autoComplete="off" autoCorrect="off" spellCheck={false}
-              readOnly={searchBusy}
-              style={{
-                width: "100%", boxSizing: "border-box", minHeight: 44,
-                background: "var(--color-bg)",
-                color: "var(--text)",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 16,
-                border: "1px solid var(--bevel-dark)",
-                padding: "0 12px", borderRadius: 0, outline: "none",
-                opacity: searchBusy ? 0.5 : 1,
-              }}
-            />
+            <div style={{
+              display: "flex", alignItems: "stretch",
+              border: `1px solid ${searchFocused ? "var(--primary)" : "var(--bevel-dark)"}`,
+              background: "var(--color-bg)",
+              opacity: searchBusy ? 0.5 : 1,
+            }}>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={cardSearch}
+                onChange={e => setCardSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                onKeyDown={e => { if (e.key === "Enter") handleCardSearch(); }}
+                placeholder="add cards · name or scryfall syntax"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+                readOnly={searchBusy}
+                style={{
+                  flex: 1, minWidth: 0, boxSizing: "border-box", minHeight: 44,
+                  background: "transparent",
+                  color: "var(--text)",
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 16,
+                  border: "none",
+                  padding: "0 12px", borderRadius: 0, outline: "none",
+                }}
+              />
+              {showQuickBrew && onBrew ? (
+                <button
+                  onClick={onBrew}
+                  aria-label="Quick brew — deal the discovery stack"
+                  style={{
+                    flexShrink: 0, minHeight: 44,
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "0 14px",
+                    background: "transparent",
+                    border: "none",
+                    borderLeft: "1px solid var(--bevel-dark)",
+                    color: "var(--primary)",
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 12, letterSpacing: "0.06em",
+                    cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>style</span>
+                  quick brew
+                </button>
+              ) : (
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={handleCardSearch}
+                  disabled={searchBusy || !cardSearch.trim()}
+                  aria-label="Search for cards to add"
+                  style={{
+                    flexShrink: 0, width: 48, minHeight: 44,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent",
+                    border: "none",
+                    borderLeft: "1px solid var(--bevel-dark)",
+                    color: cardSearch.trim() ? "var(--primary)" : "var(--muted)",
+                    cursor: cardSearch.trim() ? "pointer" : "default",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+                </button>
+              )}
+            </div>
             {searchMsg && (
               <div style={{
                 fontFamily: "'Noto Sans Mono', monospace",
@@ -1205,11 +1263,11 @@ export default function ReviewScreen({
             justifyContent: "space-between",
             padding: "0 12px",
           }}>
-            {/* Change 11 — back bottom-LEFT (exits to the Box, the decklist's
-                parent in the ladder); the flip-deck entry sits bottom-RIGHT;
-                home is removed (the back-ladder replaces it — two taps to the
-                Box is intended). Brew stays in the middle for now; Change 10
-                folds it into the search bar. */}
+            {/* Change 11/10 — back bottom-LEFT (exits to the Box, the decklist's
+                parent in the ladder); the flip-deck REVIEW entry sits
+                bottom-RIGHT. Home is removed (the back-ladder replaces it — two
+                taps to the Box is intended). The middle "brew" button is gone
+                too (Change 10): quick brew now lives in the search bar above. */}
             <button
               onClick={onHome}
               aria-label="Back"
@@ -1228,28 +1286,8 @@ export default function ReviewScreen({
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
               back
             </button>
-            <button
-              onClick={onBrew}
-              aria-label="Brew"
-              style={{
-                minHeight: 44,
-                display: "flex", alignItems: "center", gap: 6,
-                background: "transparent", border: "none",
-                // Gold while the deck is empty — reinforces the empty-state CTA
-                // that brewing is the next move; reverts to default once cards exist.
-                color: totalCards === 0 ? "var(--primary)" : "var(--text)",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.08em",
-                padding: "0 10px",
-                cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>style</span>
-              brew
-            </button>
-            {/* Flip-deck entry (renamed hand → review in Change 15), bottom-right.
-                Only when the deck has cards to flip through. */}
+            {/* Flip-deck REVIEW entry (renamed hand → review in Change 15),
+                bottom-right. Only when the deck has cards to flip through. */}
             {onHand && totalCards > 0 && (
               <button
                 onClick={() => onHand(
@@ -1258,7 +1296,7 @@ export default function ReviewScreen({
                   buildDeckGroups(groups.decklist, groupBy, sort, (n) => cardData[n])
                     .flatMap(g => g.items.map(it => it.name))
                 )}
-                aria-label="Hand — flip through your deck"
+                aria-label="Review — flip through your deck"
                 style={{
                   minHeight: 44,
                   display: "flex", alignItems: "center", gap: 6,
@@ -1272,7 +1310,7 @@ export default function ReviewScreen({
                 }}
               >
                 <span className="material-symbols-rounded" style={{ fontSize: 18 }}>back_hand</span>
-                hand
+                review
               </button>
             )}
           </div>

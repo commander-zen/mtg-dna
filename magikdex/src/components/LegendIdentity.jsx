@@ -139,25 +139,32 @@ export default function LegendIdentity({ legend }) {
             name; this pane is now purely "how is this deck composed". */}
         <div style={{
           flex: 1, minWidth: 0,
-          // Vault UAT item 5 — the block fills its whole box: bars distribute
-          // across the full card-frame height (no dead space above/below).
-          display: "flex", flexDirection: "column", justifyContent: "space-between",
-          gap: 10, padding: "2px 0",
+          // UAT batch 2, item 10 — five rows split the card-frame height
+          // EVENLY (each row flexes; no fixed gaps to clip the last bar).
+          display: "flex", flexDirection: "column",
+          padding: "2px 0",
         }}>
           {wrecBars.map(({ tag, label, n, target, ratio }) => {
             const met = ratio >= 1;
             const empty = n === 0;
             return (
-              <div key={tag} style={{ minWidth: 0 }}>
+              <div key={tag} style={{
+                flex: 1, minWidth: 0, minHeight: 0,
+                display: "flex", flexDirection: "column", justifyContent: "center",
+              }}>
                 <div style={{
                   display: "flex", alignItems: "baseline", justifyContent: "space-between",
                   gap: 8, marginBottom: 3,
                 }}>
                   <span style={{
+                    // Tighter tracking + nowrap/ellipsis so CARD-ADVANTAGE and
+                    // MASS-DISRUPTION never wrap to a second line (item 10).
                     fontFamily: "'Noto Sans Mono', monospace",
                     fontSize: 9,
-                    letterSpacing: "0.14em",
+                    letterSpacing: "0.08em",
                     color: dimColor,
+                    minWidth: 0,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {FULL_LABEL[tag] ?? label}
                   </span>

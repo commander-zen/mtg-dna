@@ -133,35 +133,28 @@ function colorBucket(card) {
   return WUBRG_LABEL[ci[0]] ?? "Colorless";
 }
 
-// Order rows within a group. cardOf resolves a name → card (may be undefined).
-function sortItems(items, sort, cardOf) {
-  const byName = (a, b) => a.name.localeCompare(b.name);
-  if (sort === "cmc") {
-    return [...items].sort((a, b) =>
-      ((cardOf(a.name)?.cmc ?? 99) - (cardOf(b.name)?.cmc ?? 99)) || byName(a, b));
-  }
-  if (sort === "color") {
-    const rank = n => {
-      const ci = cardOf(n)?.color_identity ?? [];
-      if (ci.length === 0) return 99;
-      if (ci.length > 1)  return 50;
-      return "WUBRG".indexOf(ci[0]);
-    };
-    return [...items].sort((a, b) => (rank(a.name) - rank(b.name)) || byName(a, b));
-  }
-  return [...items].sort(byName);
-}
+// Vault spec §2 — ONE view key drives both grouping and order: type / mv /
+// color group by that key with a–z inside each group; a–z is a flat list with
+// no headers at all. The old two-axis group·sort control is gone (a sort that
+// disagreed with its grouping never carried its weight on a phone).
+const VIEW_OPTIONS = [
+  { value: "type",  label: "type" },
+  { value: "cmc",   label: "mv" },
+  { value: "color", label: "color" },
+  { value: "az",    label: "a–z" },
+];
 
-// Ordered groups for a section: [{ key, label, items }]. group === "none" is a
-// single unlabelled group (flat sorted list). Bucket order is fixed per mode
-// (type/colour by canonical order; cmc numerically).
-function buildDeckGroups(items, group, sort, cardOf) {
-  if (group === "none") {
-    return [{ key: "all", label: null, items: sortItems(items, sort, cardOf) }];
+// Ordered groups for a section: [{ key, label, items }]. view === "az" is a
+// single unlabelled group (flat a–z list). Bucket order is fixed per mode
+// (type/colour by canonical order; cmc numerically); items are a–z within.
+function buildDeckGroups(items, view, cardOf) {
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  if (view === "az") {
+    return [{ key: "all", label: null, items: [...items].sort(byName) }];
   }
-  const bucketOf = group === "type"  ? n => typeBucket(cardOf(n))
-    : group === "color" ? n => colorBucket(cardOf(n))
-    :                     n => cmcBucket(cardOf(n));
+  const bucketOf = view === "type"  ? n => typeBucket(cardOf(n))
+    : view === "color" ? n => colorBucket(cardOf(n))
+    :                    n => cmcBucket(cardOf(n));
   const map = new Map();
   for (const it of items) {
     const b = bucketOf(it.name);
@@ -169,35 +162,35 @@ function buildDeckGroups(items, group, sort, cardOf) {
     map.get(b).push(it);
   }
   let keys;
-  if (group === "type")       keys = TYPE_ORDER.filter(k => map.has(k));
-  else if (group === "color") keys = COLOR_ORDER.filter(k => map.has(k));
-  else                        keys = [...map.keys()].sort((a, b) => cmcRank(a) - cmcRank(b));
+  if (view === "type")       keys = TYPE_ORDER.filter(k => map.has(k));
+  else if (view === "color") keys = COLOR_ORDER.filter(k => map.has(k));
+  else                       keys = [...map.keys()].sort((a, b) => cmcRank(a) - cmcRank(b));
   return keys.map(k => ({
     key: k,
-    label: group === "type" ? TYPE_LABEL[k] : k.toUpperCase(),
-    items: sortItems(map.get(k), sort, cardOf),
+    label: view === "type" ? TYPE_LABEL[k] : k.toUpperCase(),
+    items: [...map.get(k)].sort(byName),
   }));
 }
 
-const GROUP_OPTIONS = [
-  { value: "type",  label: "type" },
-  { value: "cmc",   label: "mv" },
-  { value: "color", label: "color" },
-  { value: "none",  label: "none" },
-];
-const DECK_SORT_OPTIONS = [
-  { value: "name",  label: "a–z" },
-  { value: "cmc",   label: "mv" },
-  { value: "color", label: "color" },
-];
+// Vault spec §2 — count-driven collapse: any labelled group longer than this
+// many ROWS first paints collapsed (header + "show all N"), so a 32-creature
+// typal bucket doesn't bury the composition; small groups render open. Flat
+// (a–z) views never collapse.
+const GROUP_COLLAPSE_AT = 15;
 
-// Sort/group preference persists per deck (keyed by legend id, the stable
-// per-deck id — one deck per legend). Best-effort localStorage.
+// View preference persists per deck (keyed by legend id, the stable per-deck
+// id — one deck per legend). Best-effort localStorage.
 const VIEW_PREF_PREFIX = "magikdex-decklist-view:";
 function loadViewPref(deckKey) {
   if (!deckKey) return null;
-  try { return JSON.parse(localStorage.getItem(VIEW_PREF_PREFIX + deckKey) ?? "null"); }
-  catch { return null; }
+  try {
+    const p = JSON.parse(localStorage.getItem(VIEW_PREF_PREFIX + deckKey) ?? "null");
+    if (!p) return null;
+    if (p.view) return p.view;
+    // Pre-spec shape {groupBy, sort}: grouping now IS the view; "none" → a–z.
+    if (p.groupBy) return p.groupBy === "none" ? "az" : p.groupBy;
+    return null;
+  } catch { return null; }
 }
 
 export default function ReviewScreen({
@@ -236,16 +229,18 @@ export default function ReviewScreen({
   // full band inline (not a new screen). Picking a category applies the filter
   // and re-collapses so the narrowed list is immediately visible.
   const [wrecOpen, setWrecOpen] = useState(false);
-  // Sort/group view controls (Change 6). Default: group by type, sort a–z
-  // (Moxfield-familiar). Lazily seeded from the per-deck saved pref, then
-  // persisted on change. Orthogonal to the WREC band — this organizes the list,
-  // the band reads composition.
-  const [groupBy, setGroupBy] = useState(() => loadViewPref(deckKey)?.groupBy ?? "type");
-  const [sort, setSort]       = useState(() => loadViewPref(deckKey)?.sort ?? "name");
-  // Change 14 — the sort/group options are collapsed by default (progressive
-  // disclosure) so the list isn't buried under a two-row control block; the
-  // summary chip shows current state and expands the full options on tap.
+  // View control (Vault spec §2). ONE key — default group-by-type (Moxfield-
+  // familiar). Lazily seeded from the per-deck saved pref, then persisted on
+  // change. Orthogonal to the WREC readout — this organizes the list, the
+  // readout reads composition.
+  const [view, setView] = useState(() => loadViewPref(deckKey) ?? "type");
+  // Change 14 — the view options are collapsed by default (progressive
+  // disclosure); the summary chip shows current state and expands on tap.
   const [controlsOpen, setControlsOpen] = useState(false);
+  // Vault spec §2 — which over-threshold groups the user has expanded
+  // (`${sectionKey}:${groupKey}`). Session-scoped on purpose: first paint of a
+  // long bucket is always the composition view, not last visit's scroll dump.
+  const [openGroups, setOpenGroups] = useState(() => new Set());
   // Change 14 — swipe-left-to-delete a decklist row (replaces the crowded per-row
   // ✕). Only one row swipes at a time, so a single {key,dx} pair drives the
   // transform. Axis-locks against vertical scroll (touchAction pan-y lets the
@@ -294,9 +289,9 @@ export default function ReviewScreen({
   }
   useEffect(() => {
     if (!deckKey) return;
-    try { localStorage.setItem(VIEW_PREF_PREFIX + deckKey, JSON.stringify({ groupBy, sort })); }
+    try { localStorage.setItem(VIEW_PREF_PREFIX + deckKey, JSON.stringify({ view })); }
     catch { /* view pref is best-effort */ }
-  }, [deckKey, groupBy, sort]);
+  }, [deckKey, view]);
   // "add more" (gap-filling stack) — pending/error state is local so the
   // button can report "no cards" inline without a global error channel.
   const [addingMore, setAddingMore] = useState(false);
@@ -472,9 +467,9 @@ export default function ReviewScreen({
           (cardTags?.[`${sectionKey}:${name}`]?.tags ?? []).includes(wrecFilter))
       : allItems;
     const total = items.reduce((n, c) => n + c.quantity, 0);
-    // Change 6 — split the section into ordered groups per the view controls.
+    // Change 6 — split the section into ordered groups per the view control.
     // The row body below is unchanged; it just iterates a group's items now.
-    const groups = buildDeckGroups(items, groupBy, sort, (n) => cardData[n]);
+    const groups = buildDeckGroups(items, view, (n) => cardData[n]);
     return (
       <div key={sectionKey}>
         {/* Change v4 — the view (group/sort) control rides INLINE on the section
@@ -501,7 +496,13 @@ export default function ReviewScreen({
         {items.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>—</div>
         ) : (
-          groups.map(g => (
+          groups.map(g => {
+            // Vault spec §2 — count-driven collapse: an over-threshold labelled
+            // group paints as its header + "show all N" until expanded, so the
+            // first paint reads as composition, not a raw dump. Session-scoped.
+            const gKey = `${sectionKey}:${g.key}`;
+            const collapsed = Boolean(g.label) && g.items.length > GROUP_COLLAPSE_AT && !openGroups.has(gKey);
+            return (
             <div key={g.key}>
               {g.label && (
                 <div style={{
@@ -513,7 +514,24 @@ export default function ReviewScreen({
                   {g.label} · {g.items.reduce((n, c) => n + c.quantity, 0)}
                 </div>
               )}
-              {g.items.map(({ name, quantity }) => {
+              {collapsed && (
+                <button
+                  onClick={() => setOpenGroups(prev => new Set(prev).add(gKey))}
+                  style={{
+                    minHeight: 44, padding: "0 2px",
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: "transparent", border: "none",
+                    color: "var(--muted)",
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  show all {g.items.length}
+                  <span className="material-symbols-rounded" style={{ fontSize: 16 }}>expand_more</span>
+                </button>
+              )}
+              {!collapsed && g.items.map(({ name, quantity }) => {
             const key = `${sectionKey}:${name}`;
             const tags = cardTags?.[key]?.tags ?? [];
             // Auto-suggested subset (deck_card_tags.source 'auto') — rendered
@@ -712,20 +730,21 @@ export default function ReviewScreen({
             );
           })}
             </div>
-          ))
+            );
+          })
         )}
       </div>
     );
   }
 
-  // Change v4 — the view (group/sort) control, compact. The collapsed chip rides
-  // inline on the DECKLIST header (see renderSection accessory); tapping it
-  // reveals the full GROUP/SORT options as a panel just under that header. Split
-  // out here so both pieces stay one definition regardless of where they mount.
+  // Vault spec §2 — the view control, compact. The collapsed chip rides inline
+  // on the DECKLIST header (see renderSection accessory); tapping it reveals
+  // the four view options as a panel just under that header. Split out here so
+  // both pieces stay one definition regardless of where they mount.
   const viewChip = (
     <button
       onClick={() => setControlsOpen(o => !o)}
-      aria-label="Group and sort options"
+      aria-label="View options"
       style={{
         minHeight: 44, padding: "0 8px", flexShrink: 0,
         display: "flex", alignItems: "center", gap: 5,
@@ -737,9 +756,7 @@ export default function ReviewScreen({
       }}
     >
       <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>tune</span>
-      {GROUP_OPTIONS.find(o => o.value === groupBy)?.label ?? groupBy}
-      <span style={{ color: "var(--muted)" }}>·</span>
-      {DECK_SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort}
+      {VIEW_OPTIONS.find(o => o.value === view)?.label ?? view}
       <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
         {controlsOpen ? "expand_less" : "expand_more"}
       </span>
@@ -750,37 +767,13 @@ export default function ReviewScreen({
       <span style={{
         fontFamily: "'Noto Sans Mono', monospace",
         fontSize: 10, letterSpacing: "0.1em", color: "var(--muted)", marginRight: 2,
-      }}>GROUP</span>
-      {GROUP_OPTIONS.map(o => {
-        const active = groupBy === o.value;
+      }}>VIEW</span>
+      {VIEW_OPTIONS.map(o => {
+        const active = view === o.value;
         return (
           <button
             key={o.value}
-            onClick={() => setGroupBy(o.value)}
-            style={{
-              minHeight: 44, padding: "0 10px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "transparent",
-              border: `1px solid ${active ? "var(--primary)" : "var(--bevel-dark)"}`,
-              color: active ? "var(--primary)" : "var(--muted)",
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 11, letterSpacing: "0.06em",
-              borderRadius: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent",
-            }}
-          >{o.label}</button>
-        );
-      })}
-      <span style={{
-        fontFamily: "'Noto Sans Mono', monospace",
-        fontSize: 10, letterSpacing: "0.1em", color: "var(--muted)",
-        marginLeft: 6, marginRight: 2,
-      }}>SORT</span>
-      {DECK_SORT_OPTIONS.map(o => {
-        const active = sort === o.value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => setSort(o.value)}
+            onClick={() => setView(o.value)}
             style={{
               minHeight: 44, padding: "0 10px",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -1346,8 +1339,9 @@ export default function ReviewScreen({
               <button
                 onClick={() => onHand(
                   // Flip through the deck in the SAME order it's displayed here
-                  // (Change 9) — flatten the current groups in display order.
-                  buildDeckGroups(groups.decklist, groupBy, sort, (n) => cardData[n])
+                  // (Change 9) — flatten the current groups in display order
+                  // (collapse is a paint concern only; every card still flips).
+                  buildDeckGroups(groups.decklist, view, (n) => cardData[n])
                     .flatMap(g => g.items.map(it => it.name))
                 )}
                 aria-label="Review — flip through your deck"

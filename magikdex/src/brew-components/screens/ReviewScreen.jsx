@@ -13,8 +13,6 @@ const ROW_DELETE_AT = 88;
 const SAFE_TOP    = "calc(env(safe-area-inset-top) + 56px)";
 const SAFE_BOTTOM = "calc(env(safe-area-inset-bottom) + 24px)";
 
-const DECK_GATE = 100;
-
 // WREC_CHIPS / LABEL_BY_TAG now live in the shared WrecBand (canonical taxonomy);
 // imported above so the composition band and the per-row tag chips share one list.
 
@@ -416,9 +414,6 @@ export default function ReviewScreen({
     // groups is derived from decklist/maybeboard; cardData is intentionally
     // omitted (the setter guards against clobbering already-resolved entries).
   }, [decklist, maybeboard]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Count toward the 100-card gate, matching deckTotal everywhere else: every
-  // instance across the boards + the commander (never written to deck_cards).
-  const deckCount = decklist.length + maybeboard.length + 1;
   const totalCards = decklist.length + maybeboard.length;
   const canSave = Boolean(commanderName.trim()) && totalCards > 0 && !saving;
 
@@ -437,13 +432,6 @@ export default function ReviewScreen({
     }
     return { tag, label, n };
   });
-  // Collapsed-chip count: cards carrying ≥1 tag (by quantity, same basis as the
-  // per-category counts — but NOT their sum, which double-counts multi-tag cards).
-  let taggedTotal = 0;
-  for (const k in (cardTags ?? {})) {
-    const e = cardTags[k];
-    if (e?.tags?.length) taggedTotal += (e.quantity ?? 1);
-  }
 
   const inputStyle = {
     width: "100%",
@@ -899,14 +887,30 @@ export default function ReviewScreen({
                 {commander.name}
               </span>
             </button>
-            <div style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 13,
-              color: deckCount >= DECK_GATE ? "var(--primary)" : "var(--muted)",
-              flexShrink: 0,
-            }}>
-              {deckCount}/{DECK_GATE}
-            </div>
+            {/* Vault UAT item 2 — the WREC disclosure trigger lives in the
+                header row, in the slot the deck count vacated (item 1:
+                DECKLIST · N below already carries the count — no reason to
+                show it twice). Label is just WREC, no numbers; an active
+                filter is named by the section header instead. */}
+            <button
+              onClick={() => setWrecOpen(o => !o)}
+              aria-label="WREC composition — show category counts"
+              aria-expanded={wrecOpen}
+              style={{
+                minHeight: 44, flexShrink: 0,
+                display: "flex", alignItems: "center", gap: 4,
+                background: "transparent", border: "none", padding: "0 4px",
+                fontFamily: "'Noto Sans Mono', monospace",
+                fontSize: 12, letterSpacing: "0.06em",
+                color: "var(--primary)",
+                cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              WREC
+              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
+                {wrecOpen ? "expand_less" : "expand_more"}
+              </span>
+            </button>
             {/* Export — Moxfield bulk-edit text, WREC tags as #hashtags. Copy
                 is guaranteed; the share sheet (where supported) is a bonus. */}
             <button
@@ -927,49 +931,19 @@ export default function ReviewScreen({
           </div>
           )}
 
-          {/* WREC readout — collapsed to a one-line summary chip (Vault spec §1:
-              secondary info is deferred until requested). The chip names the
-              active filter when one is set, so a narrowed list is never
-              unexplained; tapping discloses the five-cell band inline. */}
-          <div style={{
-            maxWidth: 430,
-            margin: "0 auto",
-            paddingLeft: 12, paddingRight: 12,
-            paddingTop: showAnchor ? 0 : "calc(env(safe-area-inset-top) + 6px)",
-            paddingBottom: 4,
-            borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
-          }}>
-            <button
-              onClick={() => setWrecOpen(o => !o)}
-              aria-label="WREC composition — show category counts"
-              aria-expanded={wrecOpen}
-              style={{
-                minHeight: 44,
-                display: "inline-flex", alignItems: "center", gap: 6,
-                background: "transparent", border: "none", padding: "0 4px",
-                fontFamily: "'Noto Sans Mono', monospace",
-                fontSize: 12, letterSpacing: "0.06em",
-                cursor: "pointer", WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span style={{ color: "var(--primary)" }}>WREC</span>
-              {wrecFilter ? (
-                <span style={{ color: "var(--primary)" }}>
-                  · {LABEL_BY_TAG[wrecFilter]} {wrecCounts.find(c => c.tag === wrecFilter)?.n ?? 0}
-                </span>
-              ) : (
-                <span style={{ color: "var(--muted)" }}>· {taggedTotal} tagged</span>
-              )}
-              <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--muted)" }}>
-                {wrecOpen ? "expand_less" : "expand_more"}
-              </span>
-            </button>
-            {/* Disclosed band — the same shared WrecBand, still the filter door:
-                tapping a category applies the filter and re-collapses (the
-                narrowed list is the answer); tapping the active one clears.
-                Zeros stay dimmed but tappable (a zero IS the gap → empty
-                filter + "add more"). */}
-            {wrecOpen && (
+          {/* Disclosed WREC band (the trigger lives in the header row above) —
+              the shared WrecBand, still the filter door: tapping a category
+              applies the filter and re-collapses (the narrowed list is the
+              answer); tapping the active one clears. Zeros stay dimmed but
+              tappable (a zero IS the gap → empty filter + "add more"). */}
+          {wrecOpen && (
+            <div style={{
+              maxWidth: 430,
+              margin: "0 auto",
+              paddingLeft: 12, paddingRight: 12,
+              paddingBottom: 4,
+              borderTop: showAnchor ? "1px solid var(--bevel-dark)" : "none",
+            }}>
               <WrecBand
                 counts={wrecCounts}
                 accent="var(--primary)"
@@ -982,8 +956,8 @@ export default function ReviewScreen({
                   setWrecOpen(false);
                 }}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

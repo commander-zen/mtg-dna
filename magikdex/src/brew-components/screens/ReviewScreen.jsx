@@ -170,12 +170,6 @@ function buildDeckGroups(items, view, cardOf) {
   }));
 }
 
-// Vault spec §2 — count-driven collapse: any labelled group longer than this
-// many ROWS first paints collapsed (header + "show all N"), so a 32-creature
-// typal bucket doesn't bury the composition; small groups render open. Flat
-// (a–z) views never collapse.
-const GROUP_COLLAPSE_AT = 15;
-
 // View preference persists per deck (keyed by legend id, the stable per-deck
 // id — one deck per legend). Best-effort localStorage.
 const VIEW_PREF_PREFIX = "magikdex-decklist-view:";
@@ -235,10 +229,6 @@ export default function ReviewScreen({
   // Change 14 — the view options are collapsed by default (progressive
   // disclosure); the summary chip shows current state and expands on tap.
   const [controlsOpen, setControlsOpen] = useState(false);
-  // Vault spec §2 — which over-threshold groups the user has expanded
-  // (`${sectionKey}:${groupKey}`). Session-scoped on purpose: first paint of a
-  // long bucket is always the composition view, not last visit's scroll dump.
-  const [openGroups, setOpenGroups] = useState(() => new Set());
   // Change 14 — swipe-left-to-delete a decklist row (replaces the crowded per-row
   // ✕). Only one row swipes at a time, so a single {key,dx} pair drives the
   // transform. Axis-locks against vertical scroll (touchAction pan-y lets the
@@ -484,13 +474,7 @@ export default function ReviewScreen({
         {items.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>—</div>
         ) : (
-          groups.map(g => {
-            // Vault spec §2 — count-driven collapse: an over-threshold labelled
-            // group paints as its header + "show all N" until expanded, so the
-            // first paint reads as composition, not a raw dump. Session-scoped.
-            const gKey = `${sectionKey}:${g.key}`;
-            const collapsed = Boolean(g.label) && g.items.length > GROUP_COLLAPSE_AT && !openGroups.has(gKey);
-            return (
+          groups.map(g => (
             <div key={g.key}>
               {g.label && (
                 <div style={{
@@ -502,24 +486,7 @@ export default function ReviewScreen({
                   {g.label} · {g.items.reduce((n, c) => n + c.quantity, 0)}
                 </div>
               )}
-              {collapsed && (
-                <button
-                  onClick={() => setOpenGroups(prev => new Set(prev).add(gKey))}
-                  style={{
-                    minHeight: 44, padding: "0 2px",
-                    display: "flex", alignItems: "center", gap: 6,
-                    background: "transparent", border: "none",
-                    color: "var(--muted)",
-                    fontFamily: "'Noto Sans Mono', monospace",
-                    fontSize: 11, letterSpacing: "0.06em",
-                    cursor: "pointer", WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  show all {g.items.length}
-                  <span className="material-symbols-rounded" style={{ fontSize: 16 }}>expand_more</span>
-                </button>
-              )}
-              {!collapsed && g.items.map(({ name, quantity }) => {
+              {g.items.map(({ name, quantity }) => {
             const key = `${sectionKey}:${name}`;
             const tags = cardTags?.[key]?.tags ?? [];
             // Auto-suggested subset (deck_card_tags.source 'auto') — rendered
@@ -748,8 +715,7 @@ export default function ReviewScreen({
             );
           })}
             </div>
-            );
-          })
+          ))
         )}
       </div>
     );
@@ -1343,8 +1309,7 @@ export default function ReviewScreen({
               <button
                 onClick={() => onHand(
                   // Flip through the deck in the SAME order it's displayed here
-                  // (Change 9) — flatten the current groups in display order
-                  // (collapse is a paint concern only; every card still flips).
+                  // (Change 9) — flatten the current groups in display order.
                   buildDeckGroups(groups.decklist, view, (n) => cardData[n])
                     .flatMap(g => g.items.map(it => it.name))
                 )}

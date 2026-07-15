@@ -782,8 +782,17 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     const idx = list.findIndex(c => c.name === name);
     if (idx === -1) return;
     const card = list[idx];
+    // Device UAT — once the LAST copy leaves the deck, drop it from the
+    // start-of-session row snapshot too. buildSwipeCards excludes both that
+    // snapshot and the live decided-names set; decidedNamesRef self-updates
+    // from state, but existingCardRows was a stale snapshot, so a removed card
+    // stayed excluded from the add-cards search ("already in your deck").
+    const stillHasCopy = list.some((c, i) => i !== idx && c.name === name);
     setList(prev => prev.filter((_, i) => i !== idx));
     commitCard(card, section, -1);
+    if (!stillHasCopy) {
+      setExistingCardRows(prev => prev.filter(r => !(r.card_name === name && r.section === section)));
+    }
   }
 
   // Live review: move ALL copies of a card to the other board directly —

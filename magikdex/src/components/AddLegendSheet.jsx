@@ -12,6 +12,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
   const abortRef = useRef(null);
   const inputRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const closeTimerRef = useRef(null);
 
   // ── Paste-import (Moxfield bulk-edit text → deck, WREC tags restored) ──────
   const [tab, setTab] = useState("search"); // "search" | "paste"
@@ -66,6 +67,10 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
         taggedCount: result.taggedCount,
         unresolvedCount: preview.unresolved.length,
       });
+      // UAT — the sheet is meant to close itself after the summary (the parent
+      // never closes it on import). Flash the result briefly, then dismiss so
+      // the new legend is visible in the box instead of leaving the modal up.
+      closeTimerRef.current = setTimeout(() => onClose(), 1200);
     } catch (err) {
       setImportResult({ error: err.message ?? "import failed" });
     } finally {
@@ -80,7 +85,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
     clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast(null), 2400);
   }
-  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
+  useEffect(() => () => { clearTimeout(toastTimerRef.current); clearTimeout(closeTimerRef.current); }, []);
 
   const textColor   = theme.white;
   const dimColor    = theme.dim;
@@ -98,6 +103,7 @@ export default function AddLegendSheet({ open, onClose, onSelect, onImport }) {
       setPickedKey(null);
       setManualCommander("");
       setImportResult(null);
+      clearTimeout(closeTimerRef.current);
       setTimeout(() => inputRef.current?.focus(), 60);
     } else {
       abortRef.current?.abort();

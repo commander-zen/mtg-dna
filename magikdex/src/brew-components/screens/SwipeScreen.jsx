@@ -970,24 +970,26 @@ export default function SwipeScreen({
             fontFamily: "var(--font-system)",
             fontSize: 32, letterSpacing: 4, color: "var(--color-text-primary)",
           }}>ALL CARDS SEEN</div>
+          {/* UAT batch 3, item 7 — the pile is dead: no "0 pile ·" count, no
+              VIEW PILE. Just the two boards that exist, and VIEW DECK. */}
           <div style={{ fontFamily: "var(--font-system)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-            {pile.length} pile · {decklist.length} mainboard · {maybeboard.length} maybe
+            {decklist.length} mainboard · {maybeboard.length} maybe
           </div>
           <button
             onClick={onGoToPile}
             style={{
-              marginTop: 8, padding: "12px 28px", borderRadius: 10,
+              marginTop: 8, padding: "12px 28px", borderRadius: 0,
               border: "1px solid var(--primary)",
               background: "transparent",
               color: "var(--primary)",
               fontFamily: "'Noto Sans', sans-serif",
               fontSize: 16, letterSpacing: 3, cursor: "pointer",
             }}
-          >VIEW PILE</button>
+          >VIEW DECK</button>
           <button
             onClick={onSearchMore}
             style={{
-              padding: "12px 28px", borderRadius: 10,
+              padding: "12px 28px", borderRadius: 0,
               border: "1px solid rgba(255,255,255,0.12)",
               background: "transparent",
               color: "rgba(255,255,255,0.45)",

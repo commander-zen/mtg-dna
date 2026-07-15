@@ -1504,10 +1504,11 @@ export default function ReviewScreen({
               fontFamily: "'Noto Sans', sans-serif", fontSize: 13, lineHeight: 1.55,
               color: "var(--text2)", margin: "0 0 14px",
             }}>
-              WREC (the Wachel Reeks Effectiveness Coefficient, named for Commander
-              creator Rachel Weeks) scores how close your deck is to her recommended
-              100-card template. A role that lands ON its target reads best — going
-              over or under both pull you away from a perfect 1.000.
+              WREC (the Wachel Reeks Effectiveness Coefficient, named in honor of the
+              great Rachel Weeks) measures your deck against her recommended 100-card
+              template. Treat the targets as guidelines, not rules — a healthy starting
+              point that plenty of great decks bend. A role near its target scores best;
+              well over or under is just a nudge to take a second look, not a red flag.
             </p>
             {[
               ["Ramp", 10, "Mana acceleration, to get ahead of the curve."],

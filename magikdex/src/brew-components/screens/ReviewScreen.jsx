@@ -270,8 +270,15 @@ export default function ReviewScreen({
       setSwipeKey(null);
       setSwipeDx(0);
     } else if (s.axis === null && live) {
-      // No drag → a tap → toggle the WREC chip selector (the row's own job).
-      setExpandedKey(k => (k === key ? null : key));
+      // No drag → a tap. Device UAT — a DECKLIST row now opens the review
+      // carousel AT that card (tagging lives there, not in an inline grid).
+      // Maybeboard rows aren't in that carousel, so they keep the inline
+      // expander (their only tag + move-to-mainboard path).
+      if (sectionKey === "decklist" && onHand) {
+        onHand(orderedDeckNames(), name);
+      } else {
+        setExpandedKey(k => (k === key ? null : key));
+      }
     }
   }
   function rowPointerCancel() {
@@ -686,30 +693,25 @@ export default function ReviewScreen({
                 </div>
                 </div>
 
-                {/* Expanded row (UAT batch 2, items 11–13) — the real card as a
-                    mini-card on the left, the WREC tag targets + move beside it
-                    on the right. Device UAT: tapping the mini-card now opens the
-                    swipeable review carousel AT this card (the old static
-                    full-size overlay is gone) — the zoom IS the stack. The
-                    persistent tag icon lives up in the row header (item 13). */}
+                {/* Expanded row — device UAT: this now only fires for MAYBEBOARD
+                    rows (decklist rows open the review carousel on tap instead).
+                    The mini-card is a static preview here; the WREC tag targets
+                    + move-to-mainboard beside it are the maybeboard's inline
+                    editor, since those cards aren't in the flip carousel. */}
                 {live && expanded && (
                   <div style={{
                     display: "flex", alignItems: "stretch", gap: 12,
                     padding: "4px 0 12px",
                   }}>
-                    {/* Mini-card — tap to open the review carousel here. Fixed
-                        card-ratio box; the corner mask matches every card. */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onHand?.(orderedDeckNames(), name); }}
-                      aria-label={`Review from ${name}`}
+                    {/* Mini-card — a static preview (maybeboard cards have no
+                        carousel to open into). Corner mask matches every card. */}
+                    <div
                       style={{
                         flexShrink: 0, width: 104,
                         aspectRatio: "63 / 88",
-                        padding: 0, border: "none",
                         background: "var(--panel)",
                         borderRadius: "5.5% / 4%", overflow: "hidden",
                         boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                        cursor: "pointer", WebkitTapHighlightColor: "transparent",
                       }}
                     >
                       {cardImg ? (
@@ -729,7 +731,7 @@ export default function ReviewScreen({
                           {card === null ? "no card" : "…"}
                         </span>
                       )}
-                    </button>
+                    </div>
 
                     {/* WREC tag targets + the move-board action as a sixth
                         uniform cell (2×3 beside the card, equal widths). Same

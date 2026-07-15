@@ -109,6 +109,11 @@ export default function SwipeScreen({
   const card = effectiveCards[idx] ?? null;
   const done = effectiveCards.length === 0 || idx >= effectiveCards.length;
 
+  // UAT batch 3, item 3 — only TRUE double-faced cards (a distinct back-face
+  // image) get the flip control. Split / aftermath / adventure cards share one
+  // image, so "flip" showed nothing there; they're read by rotating the phone.
+  const hasBackFace = Boolean(card?.card_faces?.[1]?.image_uris);
+
   // One quiet line under the commander name (UAT 10): the legend name never
   // repeats itself and the stack counts are gone — "review" names the flip
   // mode, reconnection still surfaces, brew swiping needs no status at all.
@@ -470,7 +475,7 @@ export default function SwipeScreen({
 
   // Double-tap flips double-faced cards (single tap still toggles expand)
   const handleDoubleTap = useDoubleTap(() => {
-    if (card?.card_faces?.length > 1) setFlipped(f => !f);
+    if (hasBackFace) setFlipped(f => !f);
   });
 
   // Reserve space for the header block (back button + tally + stack info)
@@ -613,10 +618,10 @@ export default function SwipeScreen({
                   )}
                 </div>
 
-                {/* Flip button — double-faced cards only. One consistent
-                    "flip" label that toggles either direction (front↔back),
-                    not a face-specific FRONT/BACK. Dimmed mono, ≥44px target. */}
-                {isCurrent && card?.card_faces?.length > 1 && (
+                {/* Flip button — TRUE double-faced cards only (a real back-face
+                    image; item 3). One consistent "flip" label toggling either
+                    direction, not a face-specific FRONT/BACK. ≥44px target. */}
+                {isCurrent && hasBackFace && (
                   <button
                     onClick={e => { e.stopPropagation(); setFlipped(f => !f); }}
                     aria-label="Flip card"

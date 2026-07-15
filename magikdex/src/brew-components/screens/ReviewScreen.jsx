@@ -615,7 +615,12 @@ export default function ReviewScreen({
                     padding: "5px 0",
                     fontSize: 13,
                     color: "var(--text)",
-                    background: live ? "var(--bg)" : "transparent",
+                    // Device UAT — paint an opaque bg ONLY while this row is
+                    // being swiped (to cover the red delete zone). Idle rows
+                    // stay transparent so they don't paint var(--bg) on their
+                    // own transform-promoted layer, which rendered a hair
+                    // darker than the page and made tap targets look deeper.
+                    background: (live && swipeKey === key) ? "var(--bg)" : "transparent",
                     transform: swipeKey === key ? `translateX(${swipeDx}px)` : "translateX(0)",
                     transition: swipeKey === key ? "none" : "transform 160ms ease",
                     touchAction: live ? "pan-y" : undefined,

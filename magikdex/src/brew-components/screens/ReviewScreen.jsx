@@ -934,12 +934,24 @@ export default function ReviewScreen({
                   }}
                 />
               )}
-              <span style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}>
-                {commander.name}
+              <span style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
+                <span style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {commander.name}
+                </span>
+                {/* UAT batch 3, item 4 — the deck's total card count, near the
+                    commander header (was missing from the list view). Commander
+                    + mainboard, matching the Box's deck-total convention. */}
+                <span style={{
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 11, letterSpacing: "0.08em",
+                  color: "var(--muted)",
+                }}>
+                  {decklist.length + 1} cards
+                </span>
               </span>
             </button>
             {/* Export — Moxfield bulk-edit text, WREC tags as #hashtags. Copy

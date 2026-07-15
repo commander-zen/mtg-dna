@@ -86,13 +86,20 @@ export default function WrecBand({ counts, accent, muted, text, activeTag = null
             style={{
               minHeight: 44,
               display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 1,
+              alignItems: "center", justifyContent: "center", gap: 2,
               background: "transparent", border: "none", padding: 0,
               borderBottom: `2px solid ${active ? accent : "transparent"}`,
               cursor: onTapTag ? "pointer" : "default",
               WebkitTapHighlightColor: "transparent",
             }}
           >
+            {/* Device UAT — the band doubles as the icon KEY: each role shows
+                its glyph over the count + label, so the badges used elsewhere
+                (row chips, review carousel) are self-explanatory. A zero cell
+                dims its icon too. */}
+            <span style={{ opacity: dim ? 0.4 : 1, lineHeight: 0 }}>
+              <WrecIcon tag={tag} size={15} />
+            </span>
             <span style={{
               fontFamily: "'Noto Sans Mono', monospace",
               fontSize: 13,

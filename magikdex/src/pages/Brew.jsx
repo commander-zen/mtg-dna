@@ -847,7 +847,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // hands it to the same SwipeScreen in handMode. Cut/maybe write through the
   // SAME deck paths the review screen uses, so the decklist and every counter
   // update live — no parallel state.
-  async function enterHandMode(orderedNames) {
+  async function enterHandMode(orderedNames, startName) {
     // The review stack flips through the deck in the SAME order the decklist is
     // currently showing (Change 9) — ReviewScreen passes its display-ordered,
     // de-duped names (its sort/group state); fall back to raw decklist order if
@@ -863,7 +863,15 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const cards = names.map(n => data[n]).filter(Boolean);
       if (!cards.length) return;
       setHandCards(cards);
-      setHandIndex(i => Math.min(i, cards.length - 1));
+      // Device UAT — start ON the selected card when one was handed in
+      // (tapping a row's mini-card, or hitting review with a card expanded);
+      // otherwise resume at the last-viewed position (clamped).
+      if (startName) {
+        const at = cards.findIndex(c => c.name === startName);
+        setHandIndex(at >= 0 ? at : 0);
+      } else {
+        setHandIndex(i => Math.min(i, cards.length - 1));
+      }
       setBrewView("hand");
     } finally {
       setLoading(false);

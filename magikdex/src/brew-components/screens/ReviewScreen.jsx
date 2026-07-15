@@ -204,9 +204,6 @@ export default function ReviewScreen({
   // over always-on chips so five 44px targets fit mobile width cleanly and
   // untagged cards stay chip-free (no "uncategorized" noise).
   const [expandedKey, setExpandedKey] = useState(null);
-  // UAT batch 2, item 12 — a row's mini-card, tapped, blows up to a full-size
-  // overlay (same gesture as the commander name up top). Holds the card name.
-  const [rowCard, setRowCard] = useState(null);
   // Per-card gameplay data (type/mana/oracle), keyed by name. deck_cards only
   // stores name+quantity, so anything richer is fetched on demand — tagging a
   // card with no visible context is guesswork. undefined = not yet resolved,
@@ -376,6 +373,14 @@ export default function ReviewScreen({
     decklist: groupByName(decklist),
     maybe: groupByName(maybeboard),
   };
+
+  // The decklist flattened in its current display order (group + sort) — the
+  // order the review/flip carousel walks. Device UAT: entering review (or
+  // tapping a row's mini-card) opens that carousel AT the chosen card, so both
+  // paths hand this list plus a start name to onHand.
+  const orderedDeckNames = () =>
+    buildDeckGroups(groups.decklist, groupBy, sortBy, (n) => cardData[n])
+      .flatMap(g => g.items.map(it => it.name));
 
   // Resolve every listed card's data in ONE batched cache query — per-name
   // getCardData here cost a Supabase round-trip (plus CORS preflight) per
@@ -677,21 +682,21 @@ export default function ReviewScreen({
                 </div>
 
                 {/* Expanded row (UAT batch 2, items 11–13) — the real card as a
-                    mini-card on the left (tap = full-size overlay, item 12),
-                    the WREC tag targets + move beside it on the right. The
-                    mini-card carries the type/mana/rules text the row no longer
-                    crams in; the persistent tag icon lives up in the row header
-                    (item 13). */}
+                    mini-card on the left, the WREC tag targets + move beside it
+                    on the right. Device UAT: tapping the mini-card now opens the
+                    swipeable review carousel AT this card (the old static
+                    full-size overlay is gone) — the zoom IS the stack. The
+                    persistent tag icon lives up in the row header (item 13). */}
                 {live && expanded && (
                   <div style={{
                     display: "flex", alignItems: "stretch", gap: 12,
                     padding: "4px 0 12px",
                   }}>
-                    {/* Mini-card — tap to blow up (item 12). Fixed card-ratio
-                        box; the corner mask matches every other card image. */}
+                    {/* Mini-card — tap to open the review carousel here. Fixed
+                        card-ratio box; the corner mask matches every card. */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); setRowCard(name); }}
-                      aria-label={`Show ${name} full size`}
+                      onClick={(e) => { e.stopPropagation(); onHand?.(orderedDeckNames(), name); }}
+                      aria-label={`Review from ${name}`}
                       style={{
                         flexShrink: 0, width: 104,
                         aspectRatio: "63 / 88",
@@ -1373,17 +1378,19 @@ export default function ReviewScreen({
               <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
               back
             </button>
-            {/* Bottom-right REVIEW (UAT batch 2, item 15) — enters the flip
-                pass, resuming at the last card viewed (Brew keeps the index).
-                Same slot as the swipe screen's done. Only when the deck has
-                cards. */}
+            {/* Bottom-right REVIEW — enters the flip pass. Device UAT: it
+                starts ON the card currently expanded in the list (if any);
+                otherwise it resumes at the last card viewed (Brew keeps the
+                index). Same slot as the swipe screen's done; deck-with-cards
+                only. */}
             {onHand && totalCards > 0 && (
               <button
                 onClick={() => onHand(
                   // Flip through the deck in the SAME order it's displayed here
                   // (Change 9) — flatten the current groups in display order.
-                  buildDeckGroups(groups.decklist, groupBy, sortBy, (n) => cardData[n])
-                    .flatMap(g => g.items.map(it => it.name))
+                  orderedDeckNames(),
+                  // Start on the expanded decklist card, if one is open.
+                  expandedKey?.startsWith("decklist:") ? expandedKey.slice("decklist:".length) : undefined,
                 )}
                 aria-label="Review — flip through your deck"
                 style={{
@@ -1437,44 +1444,6 @@ export default function ReviewScreen({
               color: commanderFull === undefined ? "var(--danger)" : "var(--muted)",
             }}>
               {commanderFull === undefined ? "couldn't load the card" : "loading…"}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Row mini-card blown up (UAT batch 2, item 12) — tap the expanded
-          row's mini-card to read the full card, tap anywhere to dismiss. The
-          card data is already resolved for the row, so this paints instantly. */}
-      {rowCard && (
-        <div
-          onClick={() => setRowCard(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${rowCard} card`}
-          style={{
-            position: "fixed", inset: 0, zIndex: 250,
-            background: "rgba(0,0,0,0.82)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          {cardData[rowCard] ? (
-            <img
-              src={getCardImage(cardData[rowCard], "normal") ?? getCardImage(cardData[rowCard], "large")}
-              alt={rowCard}
-              draggable={false}
-              style={{
-                width: "min(88vw, 400px)",
-                borderRadius: "4.75% / 3.5%",
-              }}
-            />
-          ) : (
-            <div style={{
-              fontFamily: "'Noto Sans Mono', monospace",
-              fontSize: 12,
-              color: cardData[rowCard] === null ? "var(--danger)" : "var(--muted)",
-            }}>
-              {cardData[rowCard] === null ? "couldn't load the card" : "loading…"}
             </div>
           )}
         </div>

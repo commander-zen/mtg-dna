@@ -949,11 +949,16 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     // including a pre-tagged auto recommendation) or FILLS as the user's
     // (absent). This replaces the old confirm ladder, which made clearing a
     // recommendation two taps.
+    // UAT batch 3, item 2 — the optimistic transition is computed from `prev`
+    // (not the outer `had`): using `had` here meant a stale read could append a
+    // DUPLICATE of an already-present tag, so a deselect left the cell filled
+    // and un-clearable. Recomputing per-`prev` keeps the toggle idempotent.
     const prevEntry = entry ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
     setCardTags(prev => {
       const cur = prev[key] ?? { id: deckCardId, tags: [], autoTags: [], quantity: 1 };
-      const tags = had ? cur.tags.filter(t => t !== tag) : [...cur.tags, tag];
-      const autoTags = had ? (cur.autoTags ?? []).filter(t => t !== tag) : (cur.autoTags ?? []);
+      const has = cur.tags.includes(tag);
+      const tags = has ? cur.tags.filter(t => t !== tag) : [...cur.tags, tag];
+      const autoTags = has ? (cur.autoTags ?? []).filter(t => t !== tag) : (cur.autoTags ?? []);
       return { ...prev, [key]: { ...cur, id: deckCardId, tags, autoTags } };
     });
     try {

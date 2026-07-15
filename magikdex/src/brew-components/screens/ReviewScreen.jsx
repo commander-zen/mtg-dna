@@ -715,9 +715,15 @@ export default function ReviewScreen({
                     }}>
                       {WREC_CHIPS.map(({ tag, label }) => {
                         const active = tags.includes(tag);
-                        // Auto-suggested: hollow — primary outline/text, no
-                        // fill. A user tag fills solid. Tap behavior identical.
+                        // UAT batch 3, item 2 — each cell now shows the WREC
+                        // ICON badge (same vocabulary as the collapsed row
+                        // chips), and its APPLIED state is unmistakable: an
+                        // applied tag fills in its category color (solid border
+                        // = user, dashed = auto-suggested); an unapplied one is
+                        // dimmed/empty. Deselecting empties the cell (the toggle
+                        // idempotency fix in Brew makes that actually land).
                         const auto = active && autoTags.includes(tag);
+                        const c = WREC_CHIP_COLORS[tag];
                         return (
                           <button
                             key={tag}
@@ -725,10 +731,11 @@ export default function ReviewScreen({
                             style={{
                               minHeight: 44,
                               padding: "0 6px",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              border: `1px ${auto ? "dashed" : "solid"} ${active ? "var(--primary)" : "var(--muted)"}`,
-                              background: active && !auto ? "var(--primary)" : "transparent",
-                              color: auto ? "var(--primary)" : active ? "var(--color-bg)" : "var(--muted)",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                              border: `1px ${auto ? "dashed" : "solid"} ${active ? (c?.stroke ?? "var(--primary)") : "var(--muted)"}`,
+                              background: active ? (c?.bg ?? "transparent") : "transparent",
+                              color: active ? (c?.stroke ?? "var(--primary)") : "var(--muted)",
+                              opacity: active ? 1 : 0.5,
                               fontFamily: "'Noto Sans Mono', monospace",
                               fontSize: 10,
                               letterSpacing: "0.08em",
@@ -736,7 +743,10 @@ export default function ReviewScreen({
                               cursor: "pointer",
                               WebkitTapHighlightColor: "transparent",
                             }}
-                          >{label}</button>
+                          >
+                            <WrecIcon tag={tag} size={14} />
+                            {label}
+                          </button>
                         );
                       })}
                       {onMoveCard && (

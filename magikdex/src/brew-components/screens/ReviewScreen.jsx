@@ -219,6 +219,9 @@ export default function ReviewScreen({
   // full band inline (not a new screen). Picking a category applies the filter
   // and re-collapses so the narrowed list is immediately visible.
   const [wrecOpen, setWrecOpen] = useState(false);
+  // Device UAT — the (?) opens an in-app explainer of WREC (not a jump
+  // straight to YouTube); the Command Zone video link sits at its bottom.
+  const [wrecInfoOpen, setWrecInfoOpen] = useState(false);
   // View control (UAT batch 2, item 14) — Moxfield's two independent axes:
   // GROUP BY (default type, Moxfield-familiar) and SORT BY (default name).
   // Lazily seeded from the per-deck saved pref, then persisted on change.
@@ -506,24 +509,21 @@ export default function ReviewScreen({
                   </span>
                 )}
               </button>
-              {/* UAT batch 3, items 5-6 — a (?) that explains WREC by linking
-                  out to the Command Zone deck-building guide. Opens in a new
-                  tab; stops the tap from toggling the disclosure. */}
-              <a
-                href="https://youtu.be/OSNV6224cHg"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                aria-label="What is WREC? — opens the Command Zone deck-building guide"
+              {/* A (?) that opens the WREC explainer (device UAT — the video
+                  link lives inside that box, not a jump straight to YouTube). */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setWrecInfoOpen(true); }}
+                aria-label="What is WREC?"
                 style={{
                   width: 44, height: 44, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--muted)", textDecoration: "none",
+                  background: "transparent", border: "none", padding: 0,
+                  color: "var(--muted)", cursor: "pointer",
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
                 <span className="material-symbols-rounded" style={{ fontSize: 18 }}>help</span>
-              </a>
+              </button>
             </span>
           ) : (
             <span style={{
@@ -1451,6 +1451,108 @@ export default function ReviewScreen({
               {commanderFull === undefined ? "couldn't load the card" : "loading…"}
             </div>
           )}
+        </div>
+      )}
+
+      {/* WREC explainer (device UAT) — what the five roles mean, measured
+          against Rachel Weeks' recommended template, with the Command Zone
+          video link at the BOTTOM. Tap the backdrop or × to dismiss. */}
+      {wrecInfoOpen && (
+        <div
+          onClick={() => setWrecInfoOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="What is WREC?"
+          style={{
+            position: "fixed", inset: 0, zIndex: 260,
+            background: "rgba(0,0,0,0.82)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "24px 16px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 420, maxHeight: "84dvh",
+              overflowY: "auto",
+              background: "var(--panel)",
+              border: "1px solid var(--bevel-dark)",
+              padding: "18px 18px calc(env(safe-area-inset-bottom) + 18px)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{
+                fontFamily: "'Zilla Slab', serif", fontWeight: 700,
+                fontSize: 18, letterSpacing: "0.06em", color: "var(--text)",
+              }}>
+                WHAT IS WREC?
+              </span>
+              <button
+                onClick={() => setWrecInfoOpen(false)}
+                aria-label="Close"
+                style={{
+                  width: 44, height: 44, margin: "-10px -10px -10px 0",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none", padding: 0,
+                  color: "var(--muted)", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 22 }}>close</span>
+              </button>
+            </div>
+            <p style={{
+              fontFamily: "'Noto Sans', sans-serif", fontSize: 13, lineHeight: 1.55,
+              color: "var(--text2)", margin: "0 0 14px",
+            }}>
+              WREC (the Wachel Reeks Effectiveness Coefficient, named for Commander
+              creator Rachel Weeks) scores how close your deck is to her recommended
+              100-card template. A role that lands ON its target reads best — going
+              over or under both pull you away from a perfect 1.000.
+            </p>
+            {[
+              ["Ramp", 10, "Mana acceleration, to get ahead of the curve."],
+              ["Card Advantage", 12, "Draw and card generation that keeps your hand stocked."],
+              ["Disruption", 12, "Targeted interaction — answer a single threat (removal, counters)."],
+              ["Mass Disruption", 6, "Board wipes and mass answers that reset the table."],
+              ["Mana Base", 38, "Your lands and fixing."],
+              ["Plan", 30, "The cards that actually execute your deck's gameplan."],
+            ].map(([role, target, desc]) => (
+              <div key={role} style={{ display: "flex", gap: 10, padding: "7px 0", borderTop: "1px solid var(--bevel-dark)" }}>
+                <span style={{
+                  flexShrink: 0, minWidth: 24, textAlign: "right",
+                  fontFamily: "'Noto Sans Mono', monospace", fontSize: 12,
+                  color: "var(--primary)",
+                }}>{target}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{
+                    display: "block",
+                    fontFamily: "'Noto Sans Mono', monospace", fontSize: 12,
+                    letterSpacing: "0.06em", color: "var(--text)",
+                  }}>{role}</span>
+                  <span style={{
+                    display: "block",
+                    fontFamily: "'Noto Sans', sans-serif", fontSize: 12, lineHeight: 1.45,
+                    color: "var(--text2)",
+                  }}>{desc}</span>
+                </span>
+              </div>
+            ))}
+            <a
+              href="https://youtu.be/OSNV6224cHg"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                marginTop: 16,
+                minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                border: "1px solid var(--primary)", color: "var(--primary)",
+                fontFamily: "'Noto Sans Mono', monospace", fontSize: 12, letterSpacing: "0.08em",
+                textDecoration: "none", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>play_circle</span>
+              watch the command zone guide
+            </a>
+          </div>
         </div>
       )}
 

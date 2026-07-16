@@ -61,12 +61,22 @@ export default function SettingsSheet({ open, onClose }) {
   // Attach an email to the CURRENT (anonymous) account → Supabase sends a
   // confirmation link; once tapped, the account is permanent and this same
   // email can sign into it anywhere.
+  //
+  // emailRedirectTo pins the link back to the origin the user is ACTUALLY on.
+  // Without it Supabase falls back to the dashboard's Site URL — and this app
+  // answers on several Vercel origins (the bare alias, the team-scoped one,
+  // preview deploys). Sessions and box state are per-origin, so a link that
+  // lands on a different one signs you in somewhere your deck isn't. The
+  // origin still has to be allow-listed in Auth → Redirect URLs.
   async function linkEmail() {
     const addr = email.trim();
     if (!addr || emailBusy) return;
     setEmailBusy(true);
     setEmailMsg(null);
-    const { error } = await supabase.auth.updateUser({ email: addr });
+    const { error } = await supabase.auth.updateUser(
+      { email: addr },
+      { emailRedirectTo: window.location.origin },
+    );
     setEmailBusy(false);
     // Human copy for the raw errors seen live: email_address_invalid renders
     // an empty address; the mailer rate limit reads like a user fault.
@@ -89,7 +99,10 @@ export default function SettingsSheet({ open, onClose }) {
     setEmailMsg(null);
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      options: { shouldCreateUser: false },
+      // shouldCreateUser:false so a typo can't mint an empty account;
+      // emailRedirectTo so the link signs you in on the origin you're using,
+      // not whatever the dashboard's Site URL happens to say (see linkEmail).
+      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
     });
     setEmailBusy(false);
     setEmailMsg(error

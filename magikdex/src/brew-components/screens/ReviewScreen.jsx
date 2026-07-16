@@ -89,6 +89,16 @@ function typeBucket(card) {
   return "Other";
 }
 
+// Cards you can legally run multiples of: basics, and "any number" cards like
+// Persistent Petitioners. Quantity is only a real lever for these in a singleton
+// format, so they're the only rows that get a stepper (device UAT — there was
+// no way to add basics at all). Mirrors SwipeScreen's isStackable.
+function isStackable(card) {
+  if (!card) return false;
+  if (card.type_line?.includes("Basic Land")) return true;
+  return Boolean(card.oracle_text?.includes("A deck can have any number of cards named"));
+}
+
 // A card whose BACK face is a land while its front isn't — it files under its
 // front face's group but still counts toward the mana base ("38 including mdfc").
 function isMdfcLand(card) {
@@ -215,6 +225,7 @@ export default function ReviewScreen({
   deckKey = null,
   onHand,
   searchDraft = "", onSearchDraftChange,
+  onAddCopy,
 }) {
   const [commanderName, setCommanderName] = useState("");
   const [buildName, setBuildName] = useState("");
@@ -483,6 +494,20 @@ export default function ReviewScreen({
     }
     return { tag, label, n };
   });
+
+  // Quantity stepper buttons (basics only). 44px tall for the thumb; narrower
+  // than 44 wide so the pair still leaves the card name room on a 375px row.
+  const stepperBtnStyle = {
+    width: 34, minHeight: 44,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: "transparent",
+    border: "1px solid var(--bevel-dark)",
+    color: "var(--primary)",
+    fontFamily: "'Noto Sans Mono', monospace",
+    fontSize: 15, lineHeight: 1,
+    borderRadius: 0, cursor: "pointer",
+    WebkitTapHighlightColor: "transparent",
+  };
 
   const inputStyle = {
     width: "100%",
@@ -768,9 +793,34 @@ export default function ReviewScreen({
                         )}
                       </span>
                     )}
-                    {quantity > 1 && (
+                    {/* Device UAT — basics (and "any number" cards) get a real
+                        quantity stepper; there was no way to add them at all.
+                        The stepper swallows its own pointerdown so tapping it
+                        can't also open the row's review carousel. Everything
+                        else is singleton, so it keeps the plain ×N. */}
+                    {live && onAddCopy && isStackable(card) ? (
+                      <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                        <button
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={() => onRemove(name, sectionKey)}
+                          aria-label={`Remove one ${name}`}
+                          style={stepperBtnStyle}
+                        >−</button>
+                        <span style={{
+                          minWidth: 16, textAlign: "center",
+                          fontFamily: "'Noto Sans Mono', monospace",
+                          fontSize: 13, color: "var(--text)",
+                        }}>{quantity}</span>
+                        <button
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={() => onAddCopy(name, sectionKey)}
+                          aria-label={`Add one ${name}`}
+                          style={stepperBtnStyle}
+                        >+</button>
+                      </span>
+                    ) : quantity > 1 ? (
                       <span style={{ color: "var(--muted)" }}>×{quantity}</span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 </div>

@@ -799,6 +799,20 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     }
   }
 
+  // Device UAT — add another copy of a card you can legally run multiples of
+  // (basics, "any number" cards). There was no way to add basics at all: they
+  // only arrived by flicking the same card repeatedly in the swipe stack.
+  function handleAddCopy(name, section) {
+    const [list, setList] = section === "decklist" ? [decklist, setDecklist]
+      : section === "maybe" ? [maybeboard, setMaybeboard]
+      : [pile, setPile];
+    const existing = list.find(c => c.name === name);
+    if (!existing) return;
+    const entry = { ...existing, instanceId: crypto.randomUUID() };
+    setList(prev => [...prev, entry]);
+    commitCard(entry, section, 1);
+  }
+
   // Live review: move ALL copies of a card to the other board directly —
   // no more remove + re-swipe round trip. The write is a section UPDATE on
   // the existing deck_cards row (lib/deckTags.js), NOT a −qty/+qty through
@@ -1466,6 +1480,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             onHand={session ? enterHandMode : undefined}
             searchDraft={deckSearchDraft}
             onSearchDraftChange={setDeckSearchDraft}
+            onAddCopy={session ? handleAddCopy : undefined}
           />
         )}
 

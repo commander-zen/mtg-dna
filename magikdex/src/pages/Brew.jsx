@@ -8,7 +8,7 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, fetchBrewStack, fetchTagStack, getCardDataBatch } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
-import { tagCard, untagCard, fetchDeckCardsWithTags, moveDeckCard, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
+import { tagCard, untagCard, fetchDeckCardsWithTags, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -309,7 +309,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [swipeDir, setSwipeDir]     = useState("asc");
   const [pile, setPile]             = useState([]);
   const [decklist, setDecklist]     = useState([]);
-  const [maybeboard, setMaybeboard] = useState([]);
 
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState(null);
@@ -362,7 +361,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   }
 
   useEffect(() => {
-    const total = decklist.length + maybeboard.length;
+    const total = decklist.length;
     if (!session?.legend?.id || showBackupNudge || nudgeSent) return;
     if (hasEmail !== false) return; // linked already, or auth state unknown
     if (initialDeckSizeRef.current === null) return; // session still initializing
@@ -372,7 +371,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     // setState, no cascade (every early return above keeps it a no-op).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowBackupNudge(true);
-  }, [decklist.length, maybeboard.length, hasEmail, session, showBackupNudge, nudgeSent]);
+  }, [decklist.length, hasEmail, session, showBackupNudge, nudgeSent]);
 
   function dismissBackupNudge() {
     try { localStorage.setItem(nudgeKey(session?.legend?.id), "1"); } catch { /* nag again next visit */ }
@@ -405,8 +404,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // re-seeds and in-session searches must never re-queue them.
   const decidedNamesRef = useRef(new Set());
   useEffect(() => {
-    decidedNamesRef.current = new Set([...pile, ...decklist, ...maybeboard].map(c => c.name));
-  }, [pile, decklist, maybeboard]);
+    decidedNamesRef.current = new Set([...pile, ...decklist].map(c => c.name));
+  }, [pile, decklist]);
 
   // A legend-attached session skips commander/mode selection entirely and
   // drops straight into the swipe carousel, auto-seeded from the legend's
@@ -460,13 +459,11 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
           // Tally on resume: the header/review counts read live deck contents,
           // not zero — flicks increment from here.
           const startDecklist = expandRows(existingRows, "decklist");
-          const startMaybe = expandRows(existingRows, "maybe");
           setDecklist(startDecklist);
-          setMaybeboard(startMaybe);
           setPile(expandRows(existingRows, "pile"));
           // Nudge baseline: only growth past this size counts, so resuming a
           // big deck doesn't prompt on entry — its next flick does.
-          initialDeckSizeRef.current = startDecklist.length + startMaybe.length;
+          initialDeckSizeRef.current = startDecklist.length;
         }
       }
       if (!cancelled && initialDeckSizeRef.current === null) initialDeckSizeRef.current = 0;
@@ -499,6 +496,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
         || persisted?.view === "review" || persisted?.view === "hand";
       if (resumeToReview) {
         setBrewView("review");
+        // resumeOrSeedSwipeQueue is a hoisted function declaration further down;
+        // calling it from this async IIFE is safe (it only runs post-mount).
+        // eslint-disable-next-line react-hooks/immutability
         await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted, { setView: false });
       } else {
         await resumeOrSeedSwipeQueue(colorIdentity, existingRows, persisted);
@@ -781,7 +781,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // Live review: removing a card from a section is itself a write (-1).
   function handleRemoveCard(name, section) {
     const [list, setList] = section === "decklist" ? [decklist, setDecklist]
-      : section === "maybe" ? [maybeboard, setMaybeboard]
       : [pile, setPile];
     const idx = list.findIndex(c => c.name === name);
     if (idx === -1) return;
@@ -804,7 +803,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // only arrived by flicking the same card repeatedly in the swipe stack.
   function handleAddCopy(name, section) {
     const [list, setList] = section === "decklist" ? [decklist, setDecklist]
-      : section === "maybe" ? [maybeboard, setMaybeboard]
       : [pile, setPile];
     const existing = list.find(c => c.name === name);
     if (!existing) return;
@@ -813,58 +811,13 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     commitCard(entry, section, 1);
   }
 
-  // Live review: move ALL copies of a card to the other board directly —
-  // no more remove + re-swipe round trip. The write is a section UPDATE on
-  // the existing deck_cards row (lib/deckTags.js), NOT a −qty/+qty through
-  // the flick-write queue: the delta path deletes the emptied row and 006's
-  // cascade would silently drop the card's WREC tags with it. Optimistic
-  // like tagging: instances and the keyed tag entry hop immediately, the
-  // exact prior state is restored on failure, and a successful move re-reads
-  // tags so ids/merges are authoritative.
-  async function handleMoveCard(name, from) {
-    if (!attachDeckId) return;
-    const to = from === "decklist" ? "maybe" : "decklist";
-    const [fromList, setFromList] = from === "decklist"
-      ? [decklist, setDecklist] : [maybeboard, setMaybeboard];
-    const [toList, setToList] = to === "decklist"
-      ? [decklist, setDecklist] : [maybeboard, setMaybeboard];
-    const moving = fromList.filter(c => c.name === name);
-    if (moving.length === 0) return;
-
-    const prevFrom = fromList, prevTo = toList, prevTags = cardTags;
-    setFromList(prevFrom.filter(c => c.name !== name));
-    setToList([...prevTo, ...moving]);
-    setCardTags(prev => {
-      const entry = prev[`${from}:${name}`];
-      if (!entry) return prev;
-      const next = { ...prev };
-      delete next[`${from}:${name}`];
-      const existing = prev[`${to}:${name}`];
-      next[`${to}:${name}`] = existing
-        ? { ...existing,
-            tags: [...new Set([...existing.tags, ...entry.tags])],
-            autoTags: [...new Set([...(existing.autoTags ?? []), ...(entry.autoTags ?? [])])],
-            quantity: existing.quantity + entry.quantity }
-        : entry;
-      return next;
-    });
-
-    try {
-      await moveDeckCard(attachDeckId, name, from, to);
-      loadDeckTags(attachDeckId);
-    } catch {
-      setFromList(prevFrom);
-      setToList(prevTo);
-      setCardTags(prevTags);
-    }
-  }
-
   // ── Hand mode (Change 4) ────────────────────────────────────────────────────
   // Flip through the deck as its own swipe stack. Enter builds a resolved
   // snapshot of the current decklist (unique cards, full data for art), then
-  // hands it to the same SwipeScreen in handMode. Cut/maybe write through the
-  // SAME deck paths the review screen uses, so the decklist and every counter
-  // update live — no parallel state.
+  // hands it to the same SwipeScreen in handMode. Cuts write through the SAME
+  // deck path the review screen uses, so the decklist and every counter update
+  // live — no parallel state. (The board-move path died with the maybeboard:
+  // there's nowhere else for a card to go.)
   async function enterHandMode(orderedNames, startName) {
     // The review stack flips through the deck in the SAME order the decklist is
     // currently showing (Change 9) — ReviewScreen passes its display-ordered,
@@ -911,10 +864,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setDecklist(prev => [...prev, ...entries]);
     commitCard(card, "decklist", qty);
   }
-  // ↓ maybe — move ALL copies decklist→maybe; UNDO moves them back. Reuses the
-  // existing all-copies mover (section UPDATE, WREC-tag-safe), not the delta path.
-  function handMaybe(card)   { handleMoveCard(card.name, "decklist"); }
-  function handUnmaybe(card) { handleMoveCard(card.name, "maybe"); }
 
   // Load every deck card's WREC tags when review opens (and on resume), keyed
   // for O(1) lookup by the review rows. `heal` backfills auto-suggestions for
@@ -960,6 +909,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   }
 
   useEffect(() => {
+    // Opening the deck list loads its tags — an async fetch whose setState lands
+    // after the await, not a synchronous cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (brewView === "review" && attachDeckId) loadDeckTags(attachDeckId);
   }, [brewView, attachDeckId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1025,7 +977,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setSwipeIndex(0);
     setPile([]);
     setDecklist([]);
-    setMaybeboard([]);
     setError(null);
     setSaveError(null);
     setAttachDeckId(null);
@@ -1199,7 +1150,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
       const rows = buildCardRows(deck.id, [
         ["pile", pile],
         ["decklist", decklist],
-        ["maybe", maybeboard],
       ]);
       for (let i = 0; i < rows.length; i += 100) {
         const { error: cardError } = await supabase
@@ -1299,9 +1249,14 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // the takeover is open we trap one synthetic history entry and route every
   // Back — hardware or chevron (via goBack → history.back) — through the same
   // handleBack ladder, re-arming the trap until handleBack exits the session.
+  // The "latest ref" pattern: the history-trap effect below must always call the
+  // CURRENT backTarget/handleBack without re-subscribing on every render, so
+  // these are refreshed on each render by design.
   const backTargetRef = useRef(backTarget);
+  // eslint-disable-next-line react-hooks/refs
   backTargetRef.current = backTarget;
   const handleBackRef = useRef(handleBack);
+  // eslint-disable-next-line react-hooks/refs
   handleBackRef.current = handleBack;
 
   useEffect(() => {
@@ -1337,7 +1292,10 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   // the filter chip's `{matching} of {total}` count and the narrow panel's
   // "narrows the current stack of {N}" copy. Un-narrowed and deck-excluded, so
   // it's the honest "how big is the stack I'm filtering" number.
+  // baseStackRef is only ever reassigned alongside a setSwipeCards that
+  // re-renders, so reading it here can't go stale in practice.
   const totalStackCount = session
+    // eslint-disable-next-line react-hooks/refs
     ? buildSwipeCards(baseStackRef.current, "", swipeOrder, swipeDir).length
     : 0;
 
@@ -1405,8 +1363,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             cards={swipeCards}
             pile={pile}
             onPileChange={setPile}
-            maybeboard={maybeboard}
-            onMaybeboardChange={setMaybeboard}
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => setBrewView("review")}
@@ -1434,8 +1390,6 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             cards={handCards}
             pile={pile}
             onPileChange={setPile}
-            maybeboard={maybeboard}
-            onMaybeboardChange={setMaybeboard}
             decklist={decklist}
             onDecklistChange={setDecklist}
             onGoToPile={() => setBrewView("review")}
@@ -1451,22 +1405,18 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             cardTags={cardTags}
             onToggleTag={handleToggleTag}
             onHandCut={handCut}
-            onHandMaybe={handMaybe}
             onHandUncut={handUncut}
-            onHandUnmaybe={handUnmaybe}
           />
         )}
 
         {brewView === "review" && (
           <ReviewScreen
             decklist={decklist}
-            maybeboard={maybeboard}
             onConfirm={handleConfirmSave}
             saving={saving}
             error={saveError}
             live={!!session}
             onRemove={handleRemoveCard}
-            onMoveCard={session ? handleMoveCard : undefined}
             commander={session ? { name: session.legend.name, art: session.legend.image_uri } : null}
             cardTags={cardTags}
             onToggleTag={handleToggleTag}
@@ -1508,7 +1458,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
                     fontSize: 13, lineHeight: 1.5,
                     color: "var(--text)",
                   }}>
-                    {decklist.length + maybeboard.length} cards in — this brew is
+                    {decklist.length} cards in — this brew is
                     becoming something. Add an email so it can't be lost to a
                     cleared browser or a new phone. Used for nothing else.
                   </div>

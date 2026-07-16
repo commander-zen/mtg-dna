@@ -149,8 +149,10 @@ export function isDeckUrl(text) {
 
 // URL → the same preview shape prepareImport returns. Unlike the paste path
 // this CAN throw (network/private deck) — the caller surfaces the message.
-// Tags never come from a URL import (auto-tagging owns that now); the
-// maybe/sideboard sections ride along as `section` on each line.
+// Tags never come from a URL import (auto-tagging owns that now). The
+// provider's maybeboard/sideboard is DROPPED (device UAT 2026-07-14 — the
+// maybeboard is gone): those cards aren't part of the 100, so importing them
+// into the deck would inflate it and the WREC counts.
 export async function prepareImportFromUrl(url) {
   const res = await fetch(`${DECK_API_BASE}/api/deck?url=${encodeURIComponent(url.trim())}`);
   const body = await res.json().catch(() => ({}));
@@ -160,10 +162,12 @@ export async function prepareImportFromUrl(url) {
     ...(body.commanders ?? []).map(name => ({
       quantity: 1, name, tags: [], raw: name, isCommander: true,
     })),
-    ...(body.cards ?? []).map(c => ({
-      quantity: c.quantity ?? 1, name: c.name, tags: [], raw: c.name,
-      isCommander: false, section: c.section === "maybe" ? "maybe" : "decklist",
-    })),
+    ...(body.cards ?? [])
+      .filter(c => c.section !== "maybe")
+      .map(c => ({
+        quantity: c.quantity ?? 1, name: c.name, tags: [], raw: c.name,
+        isCommander: false, section: "decklist",
+      })),
   ];
   if (lines.length === 0) throw new Error("that deck came back empty");
   return finishImport(lines);

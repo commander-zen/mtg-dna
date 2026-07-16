@@ -79,64 +79,8 @@ export async function untagCard(deckCardId, tag) {
   if (error) throw error;
 }
 
-// Move ALL copies of a card to the other board, preserving its WREC tags.
-// Implemented as a section UPDATE on the existing deck_cards row — tags
-// reference the row id, so they ride along. Never delete+reinsert, which
-// would cascade the tags away (006's on-delete-cascade cuts both ways).
-// If the target board already holds a row for the same name, merge instead:
-// union the source row's tags onto the target, sum quantities, then drop
-// the source row.
-export async function moveDeckCard(deckId, cardName, from, to) {
-  const { data: src, error: srcError } = await supabase
-    .from("deck_cards")
-    .select("id, quantity")
-    .eq("deck_id", deckId).eq("card_name", cardName).eq("section", from)
-    .maybeSingle();
-  if (srcError) throw srcError;
-  if (!src) return;
-
-  const { data: tgt, error: tgtError } = await supabase
-    .from("deck_cards")
-    .select("id, quantity")
-    .eq("deck_id", deckId).eq("card_name", cardName).eq("section", to)
-    .maybeSingle();
-  if (tgtError) throw tgtError;
-
-  if (!tgt) {
-    const { error } = await supabase
-      .from("deck_cards")
-      .update({ section: to })
-      .eq("id", src.id);
-    if (error) throw error;
-    return;
-  }
-
-  const { data: srcTags, error: tagReadError } = await supabase
-    .from("deck_card_tags")
-    .select("tag, source")
-    .eq("deck_card_id", src.id);
-  if (tagReadError) throw tagReadError;
-  if (srcTags?.length) {
-    // Carry each tag's source across the merge; ignoreDuplicates keeps the
-    // target's own rows (and their sources) when both boards had the tag.
-    const rows = srcTags.map(t => ({ deck_card_id: tgt.id, tag: t.tag, source: t.source }));
-    const { error } = await supabase
-      .from("deck_card_tags")
-      .upsert(rows, { onConflict: "deck_card_id,tag", ignoreDuplicates: true });
-    if (error) throw error;
-  }
-
-  const { error: updError } = await supabase
-    .from("deck_cards")
-    .update({ quantity: tgt.quantity + src.quantity })
-    .eq("id", tgt.id);
-  if (updError) throw updError;
-  const { error: delError } = await supabase
-    .from("deck_cards")
-    .delete()
-    .eq("id", src.id);
-  if (delError) throw delError;
-}
+// The board-mover died with the maybeboard (device UAT 2026-07-14): the deck is
+// the only board, so there's nowhere to move a card to — it's in or it's cut.
 
 // A deck's cards WITH their tag arrays: each row is a deck_cards row plus
 // `tags: string[]` (all WREC tags, possibly empty) and `autoTags: string[]`

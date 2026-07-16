@@ -33,7 +33,6 @@ const getCardPx = () => Math.min(window.innerWidth * 0.96, 440) + 4;
 
 export default function SwipeScreen({
   cards, pile, onPileChange,
-  maybeboard, onMaybeboardChange,
   decklist = [], onDecklistChange,
   onGoToPile, onSearchMore, commanderCard,
   initialIndex, onIndexChange,
@@ -43,24 +42,23 @@ export default function SwipeScreen({
   stackOrigin,
   stackNarrow = "", onClearFilter, onSearchAll,
   onEditQuery,
-  handMode = false, onHandCut, onHandMaybe, onHandUncut, onHandUnmaybe,
+  handMode = false, onHandCut, onHandUncut,
   cardTags, onToggleTag,
 }) {
-  // Cards already sorted into a pile/decklist/maybeboard leave the carousel
-  // entirely — decided cards never reappear when browsing back.
+  // Cards already sorted into a pile/decklist leave the carousel entirely —
+  // decided cards never reappear when browsing back.
   const decidedIds = useMemo(() => {
     const ids = new Set();
-    for (const c of pile)       if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
-    for (const c of decklist)   if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
-    for (const c of maybeboard) if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
+    for (const c of pile)     if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
+    for (const c of decklist) if (!isStackable(c) && c.oracle_id) ids.add(c.oracle_id);
     return ids;
-  }, [pile, decklist, maybeboard]);
+  }, [pile, decklist]);
 
   const effectiveCards = useMemo(() => {
     // Hand mode: the stack IS the deck. Show each unique decklist card once; a
-    // card leaves the stack the moment it's cut or maybe-boarded (decklist state
-    // updates and drops it). This is the inverse of brew's decided-set dedup —
-    // there decided cards are hidden; here the deck itself is what you flip.
+    // card leaves the stack the moment it's cut (decklist state updates and
+    // drops it). This is the inverse of brew's decided-set dedup — there
+    // decided cards are hidden; here the deck itself is what you flip.
     if (handMode) {
       const inDeck = new Set(decklist.map(c => c.name));
       const seen = new Set();
@@ -168,7 +166,7 @@ export default function SwipeScreen({
       if (e.key === "ArrowRight") browseNext();
       if (e.key === "ArrowLeft")  browsePrev();
       if (e.key === "ArrowUp")    doDecklist();
-      if (e.key === "ArrowDown")  doMaybe();
+      if (e.key === "ArrowDown")  doClose();
       if (e.key === "z" || e.key === "Z") doUndo();
     };
     window.addEventListener("keydown", handler);
@@ -204,11 +202,10 @@ export default function SwipeScreen({
     }, 300);
   }
 
-  // Hand mode (Change 4): same "up = resolve out of the stack, down = maybe"
-  // grammar as brew, but the stack is your DECK — so ↑ cuts the card OUT of the
-  // deck and ↓ moves it to the maybeboard. Brew owns the deck writes (all copies
-  // at once); the existing history/UNDO reverses either (4a). handCut takes the
-  // quantity back from Brew so UNDO can restore the right number of copies.
+  // Hand mode (Change 4): the stack is your DECK, so ↑ cuts the card OUT of it.
+  // Brew owns the deck writes (all copies at once) and the existing history/UNDO
+  // reverses it (4a); handCut takes the quantity back from Brew so UNDO can
+  // restore the right number of copies.
   function handCut() {
     if (!card || animOut || animBrowse || done) return;
     const acted = card;
@@ -221,36 +218,16 @@ export default function SwipeScreen({
       setOffset(0); setOffsetY(0); setAnimOut(null);
     }, 285);
   }
-  function handMaybe() {
-    if (!card || animOut || animBrowse || done) return;
-    const acted = card;
-    setAnimOut("down");
-    haptic(8);
-    setTimeout(() => {
-      onHandMaybe?.(acted);
-      setHistory(h => [...h, { card: acted, hand: "maybe" }]);
-      setIdx(i => Math.max(0, Math.min(i, effectiveCards.length - 2)));
-      setOffset(0); setOffsetY(0); setAnimOut(null);
-    }, 260);
-  }
 
-  // Flick down — maybe board
-  function doMaybe() {
-    if (!card || animOut || animBrowse || done) return;
-    setSwipeCount(c => c + 1);
-    if (handMode) return handMaybe();
-    setAnimOut("down");
-    haptic(8);
-    setTimeout(() => {
-      const cardEntry = { ...card, instanceId: crypto.randomUUID() };
-      setHistory(h => [...h, { card: cardEntry, kept: false, maybe: true }]);
-      onMaybeboardChange(prev => [...prev, cardEntry]);
-      onCardCommit?.(cardEntry, "maybe", 1);
-      // The card leaves the queue entirely — clamp idx so the track
-      // centers the next card (or the new last card, if this was it).
-      setIdx(i => Math.max(0, Math.min(i, effectiveCards.length - 2)));
-      setOffset(0); setOffsetY(0); setAnimOut(null);
-    }, 260);
+  // Flick DOWN — close the carousel (device UAT). This used to maybe-board the
+  // card, which is what people kept firing by accident when they meant "get me
+  // out of here"; the maybeboard is gone and pull-down is now the exit. Nothing
+  // is decided, so the card just springs back as the screen leaves.
+  function doClose() {
+    if (animOut || animBrowse) return;
+    setOffsetY(0);
+    haptic(4);
+    onGoToPile?.();
   }
 
   // Flick up — straight to the decklist (mainboard)
@@ -262,7 +239,7 @@ export default function SwipeScreen({
     haptic(14);
     setTimeout(() => {
       const cardEntry = { ...card, instanceId: crypto.randomUUID() };
-      setHistory(h => [...h, { card: cardEntry, kept: false, maybe: false, decklist: true }]);
+      setHistory(h => [...h, { card: cardEntry, kept: false, decklist: true }]);
       onDecklistChange?.(prev => [...prev, cardEntry]);
       onCardCommit?.(cardEntry, "decklist", 1);
       setIdx(i => Math.max(0, Math.min(i, effectiveCards.length - 2)));
@@ -276,14 +253,9 @@ export default function SwipeScreen({
     setHistory(h => h.slice(0, -1));
     if (last.hand === "cut") {
       onHandUncut?.(last.card, last.quantity);   // restore cut copies to the deck
-    } else if (last.hand === "maybe") {
-      onHandUnmaybe?.(last.card);                 // move maybe copies back to the deck
     } else if (last.kept) {
       onPileChange(pile.filter(c => c.instanceId !== last.card.instanceId));
       onCardCommit?.(last.card, "pile", -1);
-    } else if (last.maybe) {
-      onMaybeboardChange(prev => prev.filter(c => c.instanceId !== last.card.instanceId));
-      onCardCommit?.(last.card, "maybe", -1);
     } else if (last.decklist) {
       onDecklistChange?.(prev => prev.filter(c => c.instanceId !== last.card.instanceId));
       onCardCommit?.(last.card, "decklist", -1);
@@ -295,7 +267,7 @@ export default function SwipeScreen({
   }
 
   // Restore the carousel position of an undone card once it reappears
-  // in effectiveCards (after its id is removed from decklist/maybeboard/pile).
+  // in effectiveCards (after its id is removed from decklist/pile).
   useEffect(() => {
     const oid = pendingRestoreRef.current;
     if (!oid) return;
@@ -349,7 +321,7 @@ export default function SwipeScreen({
   }
 
   // Horizontal browses (carousel), vertical decides: flick up = mainboard,
-  // flick down = maybe. A vertical release before threshold springs back.
+  // flick down = close the carousel. A release before threshold springs back.
   function onPointerUp(e) {
     if (!dragging) return;
     clearTimeout(longPressTimerRef.current);
@@ -374,7 +346,7 @@ export default function SwipeScreen({
     if (axis === "y") {
       const flickDist = window.innerHeight * FLICK_RATIO;
       if (dy < 0 && (Math.abs(dy) > flickDist || vy < -FLICK_VELOCITY)) doDecklist();
-      else if (dy > 0 && (Math.abs(dy) > flickDist || vy > FLICK_VELOCITY)) doMaybe();
+      else if (dy > 0 && (Math.abs(dy) > flickDist || vy > FLICK_VELOCITY)) doClose();
       else setOffsetY(0);
       return;
     }
@@ -487,13 +459,13 @@ export default function SwipeScreen({
   const cardTagList   = tagKey ? (cardTags?.[tagKey]?.tags ?? []) : [];
   const cardAutoTags  = tagKey ? (cardTags?.[tagKey]?.autoTags ?? []) : [];
 
-  // Reserve space for the header block (back button + tally + stack info)
-  // and the bottom controls — the card track centers in what's left. Hand
-  // mode reserves extra room for the WREC tag chip row above the back/done bar.
+  // Reserve space for the header block and (in review) the WREC tag chip row —
+  // the card track centers in what's left. Device UAT: back/done are gone, so
+  // brew swiping reserves almost nothing and the card gets the screen.
   const topReserve      = "calc(env(safe-area-inset-top) + 92px)";
   const bottomReserve   = showTagChips
-    ? "calc(env(safe-area-inset-bottom) + 116px)"
-    : "calc(env(safe-area-inset-bottom) + 60px)";
+    ? "calc(env(safe-area-inset-bottom) + 66px)"
+    : "calc(env(safe-area-inset-bottom) + 20px)";
   const availableHeight = `calc(100vh - ${topReserve} - ${bottomReserve})`;
 
   // The card fills the available vertical space (height-capped), width
@@ -923,7 +895,7 @@ export default function SwipeScreen({
           opacity: swipeCount >= 5 ? 0 : 1,
           transition: "opacity 600ms ease",
         }}>
-          {handMode ? "← browse →  ↑ cut  ↓ maybe" : "← browse →  ↑ deck  ↓ maybe"}
+          {handMode ? "← browse →  ↑ cut  ↓ close" : "← browse →  ↑ deck  ↓ close"}
         </div>
       )}
 
@@ -982,10 +954,10 @@ export default function SwipeScreen({
             fontFamily: "var(--font-system)",
             fontSize: 32, letterSpacing: 4, color: "var(--color-text-primary)",
           }}>ALL CARDS SEEN</div>
-          {/* UAT batch 3, item 7 — the pile is dead: no "0 pile ·" count, no
-              VIEW PILE. Just the two boards that exist, and VIEW DECK. */}
+          {/* The pile and the maybeboard are both dead — the deck is the only
+              board left, so that's the only count worth showing. */}
           <div style={{ fontFamily: "var(--font-system)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-            {decklist.length} mainboard · {maybeboard.length} maybe
+            {decklist.length} in the deck
           </div>
           <button
             onClick={onGoToPile}
@@ -1048,12 +1020,12 @@ export default function SwipeScreen({
           deck in review, the same icon vocabulary as the list/band. Applied =
           filled category color (solid = user, dashed = auto-suggested);
           unapplied = dim. Hand mode only — brew-swipe cards aren't in the deck
-          yet, so they have no row to tag. Sits above the back/done bar. */}
+          yet, so they have no row to tag. */}
       {showTagChips && (
         <div style={{
           position: "absolute",
           left: 0, right: 0,
-          bottom: "calc(env(safe-area-inset-bottom) + 58px)",
+          bottom: "calc(env(safe-area-inset-bottom) + 8px)",
           zIndex: 5,
           display: "flex", justifyContent: "center", gap: 6,
           padding: "0 8px",
@@ -1090,60 +1062,8 @@ export default function SwipeScreen({
         </div>
       )}
 
-      {/* ── Bottom controls (Change 11 / UAT 7) — BACK bottom-left (→ the deck
-            list, the swipe's parent in the ladder), DONE bottom-right (also →
-            the deck list; the one "I'm finished here" verb, both modes). Home
-            is gone: the back-ladder (swipe → deck list → Box) replaces it. The
-            old filter button is gone too — filtering is now the editable query
-            chip (Change 10). ── */}
-      <div style={{
-        position: "absolute",
-        left: 0, right: 0,
-        bottom: "calc(env(safe-area-inset-bottom) + 8px)",
-        zIndex: 5,
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "0 8px",
-      }}>
-        {/* BACK — bottom-left, ≥44px, to the deck list */}
-        <button
-          onClick={onGoToPile}
-          aria-label="Back to deck list"
-          style={{
-            minHeight: 44, flexShrink: 0,
-            display: "flex", alignItems: "center", gap: 5,
-            background: "rgba(0,0,0,0.4)", border: "none",
-            padding: "0 10px",
-            color: "rgba(255,255,255,0.75)",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
-          <span style={{
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 11, letterSpacing: "0.08em",
-          }}>back</span>
-        </button>
-
-        <div style={{ flex: 1 }} />
-
-        {/* DONE — bottom-right (UAT 7/9): exits the swipe back to the deck
-            list, in brew and review/flip mode alike. No counts. The gesture
-            reminder moved above the card (UAT 8). */}
-        <button
-          onClick={onGoToPile}
-          aria-label="Done — back to deck list"
-          style={{
-            minHeight: 44, flexShrink: 0,
-            display: "flex", alignItems: "center",
-            background: "rgba(0,0,0,0.4)", border: "none",
-            padding: "0 12px",
-            color: "var(--primary)",
-            fontFamily: "'Noto Sans Mono', monospace",
-            fontSize: 12, letterSpacing: "0.08em",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >done</button>
-      </div>
+      {/* Device UAT — the BACK and DONE buttons are gone: pull-down (↓) closes
+          the carousel now, so they were redundant chrome over the card. */}
 
       {/* ── Commander card overlay — tap the commander bar to open, tap
             anywhere to dismiss. Unaltered full card image (Scryfall terms). ── */}

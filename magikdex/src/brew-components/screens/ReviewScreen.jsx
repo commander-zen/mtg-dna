@@ -211,14 +211,13 @@ function loadViewPref(deckKey) {
 }
 
 export default function ReviewScreen({
-  decklist, maybeboard,
+  decklist,
   onConfirm, saving, error,
   live, onRemove,
   commander,
-  cardTags, onToggleTag,
+  cardTags,
   onHome, onBrew,
   onDeleteDeck,
-  onMoveCard,
   onAddMore,
   onDeckSearch,
   stackCount = 0,
@@ -430,13 +429,11 @@ export default function ReviewScreen({
 
   const groups = {
     decklist: groupByName(decklist),
-    maybe: groupByName(maybeboard),
   };
 
   // The decklist flattened in its current display order (group + sort) — the
-  // order the review/flip carousel walks. Device UAT: entering review (or
-  // tapping a row's mini-card) opens that carousel AT the chosen card, so both
-  // paths hand this list plus a start name to onHand.
+  // order the review/flip carousel walks. Device UAT: tapping a row opens that
+  // carousel AT the chosen card, so it hands this list plus a start name.
   const orderedDeckNames = () =>
     buildDeckGroups(groups.decklist, groupBy, sortBy, (n) => cardData[n])
       .flatMap(g => g.items.map(it => it.name));
@@ -447,7 +444,7 @@ export default function ReviewScreen({
   // in a single state merge; only true cache misses (new/misspelled names)
   // trickle in per-name afterward via the throttled live path.
   useEffect(() => {
-    const names = [...groups.decklist, ...groups.maybe]
+    const names = groups.decklist
       .map(c => c.name)
       .filter(name => cardData[name] === undefined);
     if (names.length === 0) return;
@@ -469,10 +466,10 @@ export default function ReviewScreen({
       }
     });
     return () => { cancelled = true; };
-    // groups is derived from decklist/maybeboard; cardData is intentionally
-    // omitted (the setter guards against clobbering already-resolved entries).
-  }, [decklist, maybeboard]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalCards = decklist.length + maybeboard.length;
+    // groups is derived from decklist; cardData is intentionally omitted (the
+    // setter guards against clobbering already-resolved entries).
+  }, [decklist]); // eslint-disable-line react-hooks/exhaustive-deps
+  const totalCards = decklist.length;
   const canSave = Boolean(commanderName.trim()) && totalCards > 0 && !saving;
 
   // A live session anchored to a legend shows the commander header; the
@@ -697,9 +694,7 @@ export default function ReviewScreen({
             // Auto-suggested subset (deck_card_tags.source 'auto') — rendered
             // hollow/dimmed so Ben's tags and the machine's never look alike.
             const autoTags = cardTags?.[key]?.autoTags ?? [];
-            const expanded = expandedKey === key;
             const card = cardData[name];               // undefined | null | object
-            const cardImg = card ? (getCardImage(card, "normal") ?? getCardImage(card, "small")) : null;
             return (
               <div key={name}>
                 {/* Change 14 — swipe-left to delete (a red delete zone reveals
@@ -824,120 +819,6 @@ export default function ReviewScreen({
                   </div>
                 </div>
                 </div>
-
-                {/* Expanded row — device UAT: this now only fires for MAYBEBOARD
-                    rows (decklist rows open the review carousel on tap instead).
-                    The mini-card is a static preview here; the WREC tag targets
-                    + move-to-mainboard beside it are the maybeboard's inline
-                    editor, since those cards aren't in the flip carousel. */}
-                {live && expanded && (
-                  <div style={{
-                    display: "flex", alignItems: "stretch", gap: 12,
-                    padding: "4px 0 12px",
-                  }}>
-                    {/* Mini-card — a static preview (maybeboard cards have no
-                        carousel to open into). Corner mask matches every card. */}
-                    <div
-                      style={{
-                        flexShrink: 0, width: 104,
-                        aspectRatio: "63 / 88",
-                        background: "var(--panel)",
-                        borderRadius: "5.5% / 4%", overflow: "hidden",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                      }}
-                    >
-                      {cardImg ? (
-                        <img
-                          src={cardImg}
-                          alt={name}
-                          draggable={false}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                        />
-                      ) : (
-                        <span style={{
-                          width: "100%", height: "100%",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontFamily: "'Noto Sans Mono', monospace",
-                          fontSize: 10, color: "var(--muted)", textAlign: "center", padding: 6,
-                        }}>
-                          {card === null ? "no card" : "…"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* WREC tag targets + the move-board action as a sixth
-                        uniform cell (2×3 beside the card, equal widths). Same
-                        chip form throughout; the swap glyph marks move as an
-                        action, not a tag. User-facing copy says "mainboard"
-                        even though the section value is decklist. */}
-                    <div style={{
-                      flex: 1, minWidth: 0,
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2, 1fr)",
-                      gridAutoRows: "minmax(44px, 1fr)",
-                      gap: 6,
-                    }}>
-                      {WREC_CHIPS.map(({ tag, label }) => {
-                        const active = tags.includes(tag);
-                        // UAT batch 3, item 2 — each cell now shows the WREC
-                        // ICON badge (same vocabulary as the collapsed row
-                        // chips), and its APPLIED state is unmistakable: an
-                        // applied tag fills in its category color (solid border
-                        // = user, dashed = auto-suggested); an unapplied one is
-                        // dimmed/empty. Deselecting empties the cell (the toggle
-                        // idempotency fix in Brew makes that actually land).
-                        const auto = active && autoTags.includes(tag);
-                        const c = WREC_CHIP_COLORS[tag];
-                        return (
-                          <button
-                            key={tag}
-                            onClick={(e) => { e.stopPropagation(); onToggleTag?.(name, sectionKey, tag); }}
-                            style={{
-                              minHeight: 44,
-                              padding: "0 6px",
-                              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                              border: `1px ${auto ? "dashed" : "solid"} ${active ? (c?.stroke ?? "var(--primary)") : "var(--muted)"}`,
-                              background: active ? (c?.bg ?? "transparent") : "transparent",
-                              color: active ? (c?.stroke ?? "var(--primary)") : "var(--muted)",
-                              opacity: active ? 1 : 0.5,
-                              fontFamily: "'Noto Sans Mono', monospace",
-                              fontSize: 10,
-                              letterSpacing: "0.08em",
-                              borderRadius: 0,
-                              cursor: "pointer",
-                              WebkitTapHighlightColor: "transparent",
-                            }}
-                          >
-                            <WrecIcon tag={tag} size={14} />
-                            {label}
-                          </button>
-                        );
-                      })}
-                      {onMoveCard && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onMoveCard(name, sectionKey); }}
-                          style={{
-                            minHeight: 44,
-                            padding: "0 6px",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                            border: "1px solid var(--muted)",
-                            background: "transparent",
-                            color: "var(--muted)",
-                            fontFamily: "'Noto Sans Mono', monospace",
-                            fontSize: 10,
-                            letterSpacing: "0.08em",
-                            borderRadius: 0,
-                            cursor: "pointer",
-                            WebkitTapHighlightColor: "transparent",
-                          }}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: 14 }}>swap_vert</span>
-                          {sectionKey === "decklist" ? "MAYBE" : "MAIN"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1298,13 +1179,12 @@ export default function ReviewScreen({
           </div>
         ) : (
           <>
-            {/* DECKLIST always; MAYBEBOARD only when it holds cards. No pile.
+            {/* The deck is the only board — no pile, no maybeboard (device UAT).
                 The view control rides on the DECKLIST header (accessory + panel);
                 only meaningful once the deck holds cards. */}
             {renderSection("DECKLIST", groups.decklist, "decklist",
               totalCards > 0 ? viewChip : null,
               totalCards > 0 && controlsOpen ? viewPanel : null)}
-            {maybeboard.length > 0 && renderSection("MAYBEBOARD", groups.maybe, "maybe")}
           </>
         )}
 

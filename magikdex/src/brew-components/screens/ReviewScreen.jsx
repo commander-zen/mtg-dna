@@ -436,6 +436,10 @@ export default function ReviewScreen({
   const wrecCounts = WREC_CHIPS.map(({ tag, label }) => {
     let n = 0;
     for (const k in (cardTags ?? {})) {
+      // Device UAT — the maybeboard is NOT part of the WREC calculus. Keys are
+      // `${section}:${name}`, so count the mainboard only; otherwise sidelined
+      // cards inflated every role.
+      if (!k.startsWith("decklist:")) continue;
       const e = cardTags[k];
       if (e?.tags?.includes(tag)) n += (e.quantity ?? 1);
     }

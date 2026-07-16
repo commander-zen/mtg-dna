@@ -85,7 +85,12 @@ export default function LegendIdentity({ legend }) {
   // is kept uncapped so an OVER-target category can be marked (accent count).
   const wrecBars = WREC_CHIPS.map(({ tag, label }) => {
     let n = 0;
-    for (const r of tagRows) if (r.tags?.includes(tag)) n += (r.quantity ?? 1);
+    // Device UAT — the maybeboard is NOT part of the WREC calculus; only the
+    // mainboard counts (fetchDeckCardsWithTags returns every section).
+    for (const r of tagRows) {
+      if (r.section !== "decklist") continue;
+      if (r.tags?.includes(tag)) n += (r.quantity ?? 1);
+    }
     const target = CATEGORY_META[tag]?.target ?? 0;
     const ratio = target ? n / target : 0;
     return { tag, label, n, target, ratio };

@@ -512,11 +512,12 @@ export default function ReviewScreen({
 
   // Quantity stepper buttons (basics only). 44px tall for the thumb; narrower
   // than 44 wide so the pair still leaves the card name room on a 375px row.
+  // Borderless (device UAT) — the glyphs carry it; the boxes were noise.
   const stepperBtnStyle = {
     width: 34, minHeight: 44,
     display: "flex", alignItems: "center", justifyContent: "center",
     background: "transparent",
-    border: "1px solid var(--bevel-dark)",
+    border: "none",
     color: "var(--primary)",
     fontFamily: "'Noto Sans Mono', monospace",
     fontSize: 15, lineHeight: 1,

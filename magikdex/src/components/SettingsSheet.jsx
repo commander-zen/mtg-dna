@@ -394,6 +394,70 @@ export default function SettingsSheet({ open, onClose }) {
             </span>
           </a>
 
+          {/* ── Credits ──────────────────────────────────────────────────────
+              magikdex is built on other people's work: Scryfall serves every
+              card object and image, EDHREC's rankings are what make the brew
+              stack relevant rather than random. Crediting them is the point;
+              the links are how someone finds them. */}
+          <div style={{
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: dimColor,
+            margin: "20px 0 8px",
+          }}>
+            built on
+          </div>
+          {[
+            ["Scryfall", "card data & images", "https://scryfall.com"],
+            ["EDHREC", "synergy & recommendations", "https://edhrec.com"],
+            ["Archidekt", "deck import", "https://archidekt.com"],
+            ["Moxfield", "deck import", "https://moxfield.com"],
+          ].map(([name, what, href]) => (
+            <a
+              key={name}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...rowStyle, textDecoration: "none" }}
+            >
+              <span style={labelStyle}>{name}</span>
+              <span style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 13,
+                color: dimColor,
+              }}>
+                {what}
+              </span>
+            </a>
+          ))}
+
+          {/* The Fan Content notice is REQUIRED, verbatim, by Wizards' Fan
+              Content Policy — it's the permission magikdex (and Scryfall's
+              image/data service) operates under. Wording is quoted exactly as
+              the policy specifies; do not paraphrase it. */}
+          <div style={{
+            marginTop: 20,
+            fontFamily: "'Noto Sans', sans-serif",
+            fontSize: 11,
+            lineHeight: 1.6,
+            color: dimColor,
+          }}>
+            magikdex is unofficial Fan Content permitted under the{" "}
+            <a
+              href="https://company.wizards.com/en/legal/fancontentpolicy"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: accent, textDecoration: "none" }}
+            >
+              Fan Content Policy
+            </a>
+            . Not approved/endorsed by Wizards. Portions of the materials used
+            are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+          </div>
+
           <div style={{
             marginTop: 16,
             fontFamily: "'Noto Sans Mono', monospace",

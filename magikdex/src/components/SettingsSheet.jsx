@@ -30,6 +30,14 @@ export default function SettingsSheet({ open, onClose }) {
   const [email, setEmail] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState(null);
+  // Once a code is sent we swap the send buttons for a 6-digit entry. Magic
+  // links can't come back to an iOS standalone PWA — the OS opens every https
+  // link in the default browser, so the session lands in the wrong storage
+  // context and never reaches the box. A code the user types stays in-app.
+  // pendingFlow remembers which button sent it so verifyOtp uses the right type
+  // ('email_change' for a new email attach, 'email' for signing back in).
+  const [pendingFlow, setPendingFlow] = useState(null); // 'backup' | 'signin' | null
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -58,56 +66,91 @@ export default function SettingsSheet({ open, onClose }) {
     } catch { /* clipboard denied — the id is still visible to transcribe */ }
   }
 
-  // Attach an email to the CURRENT (anonymous) account → Supabase sends a
-  // confirmation link; once tapped, the account is permanent and this same
-  // email can sign into it anywhere.
-  //
-  // emailRedirectTo pins the link back to the origin the user is ACTUALLY on.
-  // Without it Supabase falls back to the dashboard's Site URL — and this app
-  // answers on several Vercel origins (the bare alias, the team-scoped one,
-  // preview deploys). Sessions and box state are per-origin, so a link that
-  // lands on a different one signs you in somewhere your deck isn't. The
-  // origin still has to be allow-listed in Auth → Redirect URLs.
+  // Attach an email to the CURRENT (anonymous) account → Supabase emails a
+  // 6-digit code; entering it (verifyCode, type 'email_change') makes the
+  // account permanent, and this same email can then sign into it anywhere.
   async function linkEmail() {
     const addr = email.trim();
     if (!addr || emailBusy) return;
     setEmailBusy(true);
     setEmailMsg(null);
-    const { error } = await supabase.auth.updateUser(
-      { email: addr },
-      { emailRedirectTo: window.location.origin },
-    );
+    const { error } = await supabase.auth.updateUser({ email: addr });
     setEmailBusy(false);
-    // Human copy for the raw errors seen live: email_address_invalid renders
-    // an empty address; the mailer rate limit reads like a user fault.
-    setEmailMsg(error
-      ? (error.code === "email_address_invalid"
-          ? "that email doesn't look deliverable — try another"
-          : error.code === "over_email_send_rate_limit"
-            ? "email is busy right now — nothing is lost, try again in an hour"
-            : error.message)
-      : "confirmation sent — open the link and your box is backed up");
+    if (error) {
+      // Human copy for the raw errors seen live: email_address_invalid renders
+      // an empty address; the mailer rate limit reads like a user fault.
+      setEmailMsg(error.code === "email_address_invalid"
+        ? "that email doesn't look deliverable — try another"
+        : error.code === "over_email_send_rate_limit"
+          ? "email is busy right now — nothing is lost, try again in an hour"
+          : error.message);
+      return;
+    }
+    setCode("");
+    setPendingFlow("backup");
+    setEmailMsg("code sent — enter the 6 digits from your email");
   }
 
-  // Returning user on a new device: magic-link sign-in to the account that
-  // email is linked to. shouldCreateUser:false so a typo can't silently
+  // Returning user on a new device: send a 6-digit sign-in code for the account
+  // that email is linked to. shouldCreateUser:false so a typo can't silently
   // mint a fresh empty account.
-  async function sendSignInLink() {
+  async function sendSignInCode() {
     const addr = email.trim();
     if (!addr || emailBusy) return;
     setEmailBusy(true);
     setEmailMsg(null);
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      // shouldCreateUser:false so a typo can't mint an empty account;
-      // emailRedirectTo so the link signs you in on the origin you're using,
-      // not whatever the dashboard's Site URL happens to say (see linkEmail).
-      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+      options: { shouldCreateUser: false },
     });
     setEmailBusy(false);
-    setEmailMsg(error
-      ? "no box is linked to that email — back this one up first"
-      : "sign-in link sent — open it on this device");
+    if (error) {
+      setEmailMsg("no box is linked to that email — back this one up first");
+      return;
+    }
+    setCode("");
+    setPendingFlow("signin");
+    setEmailMsg("code sent — enter the 6 digits from your email");
+  }
+
+  // Verify the emailed code in-app — no link, so it works inside the iOS PWA.
+  // The OTP type differs by intent: attaching a new email is an 'email_change',
+  // signing back into an existing box is 'email'.
+  async function verifyCode() {
+    const token = code.trim();
+    const flow = pendingFlow;
+    if (token.length < 6 || emailBusy || !flow) return;
+    setEmailBusy(true);
+    setEmailMsg(null);
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token,
+      type: flow === "backup" ? "email_change" : "email",
+    });
+    setEmailBusy(false);
+    if (error) {
+      setEmailMsg(error.code === "otp_expired"
+        ? "that code expired — send a fresh one"
+        : "that code didn't match — check the digits and retry");
+      return;
+    }
+    // Re-read the session so the UI flips to the backed-up/signed-in state.
+    const { data } = await supabase.auth.getSession();
+    setUserId(data.session?.user?.id ?? null);
+    setUserEmail(data.session?.user?.email || null);
+    setPendingFlow(null);
+    setCode("");
+    setEmailMsg(flow === "backup"
+      ? "backed up — your box now survives new devices"
+      : "signed in — your box is here");
+  }
+
+  // Bail out of code entry back to the email step (wrong address, want a resend
+  // from scratch, or changed their mind).
+  function cancelCode() {
+    setPendingFlow(null);
+    setCode("");
+    setEmailMsg(null);
   }
 
   function updateDefaults(patch) {
@@ -295,9 +338,10 @@ export default function SettingsSheet({ open, onClose }) {
           </div>
 
           {/* Backup email — decks live on the account; an email makes the
-              account recoverable anywhere (magic link), so clearing the
-              browser can never eat a curated deck. The address is used for
-              nothing else. */}
+              account recoverable anywhere via a 6-digit code, so clearing the
+              browser can never eat a curated deck. A code (not a link) keeps
+              sign-in inside the app — critical on iOS, where a link would bounce
+              out to the default browser. The address is used for nothing else. */}
           {userEmail ? (
             <div style={{ ...rowStyle, cursor: "default" }}>
               <span style={labelStyle}>backed up to</span>
@@ -308,6 +352,85 @@ export default function SettingsSheet({ open, onClose }) {
               }}>
                 {userEmail}
               </span>
+            </div>
+          ) : pendingFlow ? (
+            <div style={{ ...rowStyle, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+              <span style={{
+                fontFamily: "'Noto Sans', sans-serif",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: dimColor,
+              }}>
+                enter the 6-digit code we emailed to {email.trim()}
+              </span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: 44,
+                  background: "transparent",
+                  color: textColor,
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 20,
+                  letterSpacing: "0.4em",
+                  textAlign: "center",
+                  border: `1px solid ${borderColor}`,
+                  padding: "0 12px",
+                  borderRadius: 0,
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={verifyCode}
+                  disabled={emailBusy || code.trim().length < 6}
+                  style={{
+                    minHeight: 44, flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${accent}`,
+                    color: accent,
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    cursor: "pointer",
+                    opacity: emailBusy || code.trim().length < 6 ? 0.5 : 1,
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  verify
+                </button>
+                <button
+                  onClick={cancelCode}
+                  disabled={emailBusy}
+                  style={{
+                    minHeight: 44, flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${borderColor}`,
+                    color: dimColor,
+                    fontFamily: "'Noto Sans Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.06em",
+                    cursor: "pointer",
+                    opacity: emailBusy ? 0.5 : 1,
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  use another email
+                </button>
+              </div>
+              {emailMsg && (
+                <span style={{
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: dimColor,
+                }}>
+                  {emailMsg}
+                </span>
+              )}
             </div>
           ) : (
             <div style={{ ...rowStyle, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
@@ -361,7 +484,7 @@ export default function SettingsSheet({ open, onClose }) {
                   back up this box
                 </button>
                 <button
-                  onClick={sendSignInLink}
+                  onClick={sendSignInCode}
                   disabled={emailBusy || !email.trim()}
                   style={{
                     minHeight: 44, flex: 1,

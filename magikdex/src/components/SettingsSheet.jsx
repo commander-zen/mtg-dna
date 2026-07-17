@@ -77,6 +77,13 @@ export default function SettingsSheet({ open, onClose }) {
     const { error } = await supabase.auth.updateUser({ email: addr });
     setEmailBusy(false);
     if (error) {
+      // Already-registered email → it's the login for an existing box, not a
+      // dead end. Pivot to the sign-in code flow so they land in that box
+      // instead of staring at "already registered" with nowhere to go.
+      if (error.code === "email_exists" || /already .*registered/i.test(error.message || "")) {
+        await sendSignInCode();
+        return;
+      }
       // Human copy for the raw errors seen live: email_address_invalid renders
       // an empty address; the mailer rate limit reads like a user fault.
       setEmailMsg(error.code === "email_address_invalid"

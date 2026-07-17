@@ -95,7 +95,7 @@ export default function SettingsSheet({ open, onClose }) {
     }
     setCode("");
     setPendingFlow("backup");
-    setEmailMsg("code sent — enter the 6 digits from your email");
+    setEmailMsg("code sent — enter it from your email");
   }
 
   // Returning user on a new device: send a 6-digit sign-in code for the account
@@ -117,7 +117,7 @@ export default function SettingsSheet({ open, onClose }) {
     }
     setCode("");
     setPendingFlow("signin");
-    setEmailMsg("code sent — enter the 6 digits from your email");
+    setEmailMsg("code sent — enter it from your email");
   }
 
   // Verify the emailed code in-app — no link, so it works inside the iOS PWA.
@@ -368,14 +368,17 @@ export default function SettingsSheet({ open, onClose }) {
                 lineHeight: 1.5,
                 color: dimColor,
               }}>
-                enter the 6-digit code we emailed to {email.trim()}
+                enter the code we emailed to {email.trim()}
               </span>
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="000000"
+                placeholder="code"
                 value={code}
-                onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                // Length is a Supabase setting (6–10 digits) — accept up to 10
+                // rather than assuming 6, so a longer configured code isn't
+                // silently truncated on entry.
+                onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 style={{
                   width: "100%",
                   boxSizing: "border-box",

@@ -12,6 +12,29 @@ import { tagCard, untagCard, fetchDeckCardsWithTags, autoWrecTags, applyAutoTags
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
+// deck_card ids the user has curated (or that auto-tagging has already been
+// offered to). The deck-list "heal" only re-suggests to ZERO-tag rows, so
+// without this a card stripped back to no tags would see its suggestions creep
+// back on the next open. A card is marked the first time it's auto-tagged (at
+// insert or heal) AND the moment the user toggles any tag on it — so once a
+// card is touched, its tags are the user's to keep, even at zero. Per-browser
+// (a fresh device may re-heal a card once); deck_card ids are globally unique
+// so one flat set covers every deck.
+const HEALED_KEY = "magikdex.curatedDeckCards";
+function loadHealedSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(HEALED_KEY) || "[]")); }
+  catch { return new Set(); }
+}
+function markHealed(ids) {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  if (list.length === 0) return;
+  try {
+    const set = loadHealedSet();
+    for (const id of list) set.add(id);
+    localStorage.setItem(HEALED_KEY, JSON.stringify([...set]));
+  } catch { /* storage blocked — the mark just isn't remembered */ }
+}
+
 // Brew sub-screens are always dark — card art is designed against dark.
 // Jackson Storm "steel storm" recolor (UAT batch 2, item 3): near-black
 // grounds, one electric-steel accent replacing the old gold/amber, a dimmer
@@ -777,6 +800,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
         try {
           const suggestions = await autoWrecTags([oracleId]);
           await applyAutoTags(inserted.id, suggestions.get(oracleId) ?? []);
+          markHealed(inserted.id); // offered — never re-suggest, even if cleared
         } catch { /* healed on next deck-list open */ }
       }
     }
@@ -886,13 +910,13 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   }
 
   // Backfill auto-WREC suggestions for deck cards that predate flick-time
-  // auto-tagging (or whose flick-time write failed). Scope: rows with ZERO
-  // tags only — a card the user has tagged, or stripped down to a subset, is
-  // theirs to keep. (Trade-off: stripping EVERY tag from a card invites its
-  // suggestions back on the next deck-list open.) Names resolve through the
-  // batched cache; one card_tags query covers all of them.
+  // auto-tagging (or whose flick-time write failed). Scope: ZERO-tag rows the
+  // user hasn't already curated (loadHealedSet) — a card that's been touched,
+  // even stripped to zero, is theirs to keep and never re-suggested. Names
+  // resolve through the batched cache; one card_tags query covers all of them.
   async function healAutoTags(deckId, rows) {
-    const bare = rows.filter(r => r.tags.length === 0);
+    const curated = loadHealedSet();
+    const bare = rows.filter(r => r.tags.length === 0 && !curated.has(r.id));
     if (bare.length === 0) return;
     try {
       const { data: byName } = await getCardDataBatch(bare.map(r => r.card_name));
@@ -908,6 +932,9 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
         await applyAutoTags(r.id, tags);
         touched = true;
       }));
+      // Mark every row we could RESOLVE (whether or not it got a suggestion) so
+      // it's not re-offered next open; leave cache-miss rows unmarked to retry.
+      markHealed(bare.filter(r => byName[r.card_name]?.oracle_id).map(r => r.id));
       if (touched) loadDeckTags(deckId, false);
     } catch { /* best-effort — untagged rows just stay untagged this open */ }
   }
@@ -955,6 +982,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     try {
       if (had) await untagCard(deckCardId, tag);
       else await tagCard(deckCardId, tag);
+      markHealed(deckCardId); // user curated this card — stop auto-suggesting to it
     } catch {
       setCardTags(prev => ({ ...prev, [key]: prevEntry }));
     }

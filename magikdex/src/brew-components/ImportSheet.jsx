@@ -3,7 +3,9 @@ import { useState } from "react";
 const UA = "DeckStack/1.0 (deck-stack.vercel.app)";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const isBasicLand  = c => Boolean(c?.type_line?.includes("Basic Land"));
+// "Basic" + "Land" (not the literal "Basic Land") so snow basics — type line
+// "Basic Snow Land — Wastes" — count too.
+const isBasicLand  = c => Boolean(c?.type_line?.includes("Basic") && c.type_line.includes("Land"));
 const isAnyNumber  = c => Boolean(c?.oracle_text?.includes("A deck can have any number of cards named"));
 const isStackable  = c => isBasicLand(c) || isAnyNumber(c);
 

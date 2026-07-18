@@ -95,7 +95,9 @@ function typeBucket(card) {
 // no way to add basics at all). Mirrors SwipeScreen's isStackable.
 function isStackable(card) {
   if (!card) return false;
-  if (card.type_line?.includes("Basic Land")) return true;
+  // "Basic" + "Land" (not the literal "Basic Land") so snow basics — type line
+  // "Basic Snow Land — Wastes" — count too.
+  if (card.type_line?.includes("Basic") && card.type_line.includes("Land")) return true;
   return Boolean(card.oracle_text?.includes("A deck can have any number of cards named"));
 }
 

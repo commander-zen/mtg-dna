@@ -8,7 +8,8 @@ import SwipeScreen from "../brew-components/screens/SwipeScreen.jsx";
 import ReviewScreen from "../brew-components/screens/ReviewScreen.jsx";
 import { fetchFirstPageForSwipe, fetchCardIdentity, getCardImage, fetchBrewStack, fetchTagStack, getCardDataBatch } from "../lib/scryfall.js";
 import { getBrewDefaults } from "../lib/brewDefaults.js";
-import { tagCard, untagCard, fetchDeckCardsWithTags, autoWrecTags, applyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
+import { tagCard, untagCard, fetchDeckCardsWithTags, autoWrecTags, applyAutoTags, bulkInsertDeckCards, bulkApplyAutoTags, WREC_TO_OTAGS } from "../lib/deckTags.js";
+import { CATEGORY_META } from "../lib/wrec.js";
 import { fetchLegendDeck, deleteLegend, upsertLegend } from "../lib/legendDeck.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -34,6 +35,16 @@ function markHealed(ids) {
     localStorage.setItem(HEALED_KEY, JSON.stringify([...set]));
   } catch { /* storage blocked — the mark just isn't remembered */ }
 }
+
+// ── "Finish the 99" builder constants ────────────────────────────────────────
+const DECK_SIZE   = 99;                                    // 99 + commander = 100
+const LAND_TARGET = CATEGORY_META["mana-base"].target;     // 38
+const ROLE_FILL_ORDER = ["ramp", "card-advantage", "disruption", "mass-disruption"];
+// One basic per colour of the commander's identity (colourless → Wastes).
+const BASIC_FOR_COLOR = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G: "Forest" };
+// Land by FRONT face, matching the app's MDFC bucketing (an "Instant // Land"
+// MDFC is a spell, not a land).
+const isLandCard = c => Boolean(c?.type_line?.split("//")[0].includes("Land"));
 
 // Brew sub-screens are always dark — card art is designed against dark.
 // Jackson Storm "steel storm" recolor (UAT batch 2, item 3): near-black
@@ -332,6 +343,7 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
   const [swipeDir, setSwipeDir]     = useState("asc");
   const [pile, setPile]             = useState([]);
   const [decklist, setDecklist]     = useState([]);
+  const [building, setBuilding]     = useState(false); // "Finish the 99" in flight
 
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState(null);
@@ -891,6 +903,129 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     const entries = Array.from({ length: qty }, () => ({ name: card.name, instanceId: crypto.randomUUID() }));
     setDecklist(prev => [...prev, ...entries]);
     commitCard(card, "decklist", qty);
+  }
+
+  // ── "Finish the 99" — one-tap auto-build ────────────────────────────────────
+  // From empty, mid-brew, or nearly done, fill the deck to 99: (1) top the mana
+  // base to LAND_TARGET, (2) fill the WREC roles toward their targets from the
+  // legend's EDHREC stack, (3) sweep the best remaining cards to 99 (this covers
+  // "plan"). Only ADDS — never removes or re-tags what's already there. Writes in
+  // a few bulk queries, then lands on review so the user can swipe to personalise.
+  async function finishTheDeck() {
+    if (!attachDeckId || !session?.legend?.name || building) return;
+    setBuilding(true);
+    try {
+      const ci = legendColorIdentity ?? [];
+      const haveNames = new Set(decklist.map(c => c.name));
+
+      // Current deck: resolve card data to count lands (by front face).
+      const { data: haveData } = haveNames.size
+        ? await getCardDataBatch([...haveNames]) : { data: {} };
+      const currentLandCount = decklist.filter(c => isLandCard(haveData?.[c.name])).length;
+      const currentTotal = decklist.length;
+
+      // ── 1. Lands: nonbasic staples first, basics fill the rest ──
+      // Capped by remaining deck space so an already-large, under-landed deck
+      // can't overshoot 99 (we only add — we never cut spells to make room).
+      const landsToAdd = Math.max(0, Math.min(LAND_TARGET - currentLandCount, DECK_SIZE - currentTotal));
+      const landEntries = []; // { card_name, quantity, oracle_id }
+      if (landsToAdd > 0) {
+        let nonbasics = [];
+        try {
+          const { cards } = await fetchFirstPageForSwipe(
+            withColorIdentity("t:land -t:basic", ci), { order: "edhrec", dir: "asc" });
+          nonbasics = cards ?? [];
+        } catch { nonbasics = []; }
+        let added = 0;
+        for (const c of nonbasics) {
+          if (added >= landsToAdd) break;
+          if (haveNames.has(c.name)) continue;
+          landEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null });
+          haveNames.add(c.name);
+          added += 1;
+        }
+        const remaining = landsToAdd - added;
+        if (remaining > 0) {
+          const basicNames = ci.length
+            ? ci.map(col => BASIC_FOR_COLOR[col]).filter(Boolean) : ["Wastes"];
+          const perBasic = {};
+          for (let i = 0; i < remaining; i++) {
+            const name = basicNames[i % basicNames.length];
+            perBasic[name] = (perBasic[name] ?? 0) + 1;
+          }
+          for (const [name, qty] of Object.entries(perBasic)) {
+            landEntries.push({ card_name: name, quantity: qty, oracle_id: null });
+          }
+        }
+      }
+      const landCopies = landEntries.reduce((n, e) => n + e.quantity, 0);
+
+      // ── 2 + 3. Nonland spells: role-fill toward targets, then top up to 99 ──
+      const nonlandToAdd = Math.max(0, DECK_SIZE - currentTotal - landCopies);
+      const spellEntries = []; // { card_name, quantity:1, oracle_id, categories }
+      if (nonlandToAdd > 0) {
+        const stack = (await fetchBrewStack({ legendName: session.legend.name, colorIdentity: ci, excludeLands: true }))
+          .filter(c => c?.name && !haveNames.has(c.name) && !isLandCard(c));
+        const catMap = await autoWrecTags(stack.map(c => c.oracle_id).filter(Boolean));
+        const catsOf = c => (c.oracle_id ? catMap.get(c.oracle_id) : null) ?? [];
+
+        // Current per-role counts, so we fill the GAP not the whole target.
+        const roleCount = {};
+        for (const r of ROLE_FILL_ORDER) roleCount[r] = 0;
+        const haveOracle = [...haveNames].map(n => haveData?.[n]?.oracle_id).filter(Boolean);
+        const haveCats = await autoWrecTags(haveOracle);
+        for (const cats of haveCats.values()) {
+          for (const cat of cats) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
+        }
+
+        const pickedNames = new Set();
+        const pick = c => {
+          pickedNames.add(c.name);
+          spellEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null, categories: catsOf(c) });
+          for (const cat of catsOf(c)) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
+        };
+        for (const role of ROLE_FILL_ORDER) {
+          const target = CATEGORY_META[role]?.target ?? 0;
+          for (const c of stack) {
+            if (spellEntries.length >= nonlandToAdd) break;
+            if (roleCount[role] >= target) break;
+            if (pickedNames.has(c.name) || !catsOf(c).includes(role)) continue;
+            pick(c);
+          }
+          if (spellEntries.length >= nonlandToAdd) break;
+        }
+        for (const c of stack) { // top-up sweep (covers plan + the remainder)
+          if (spellEntries.length >= nonlandToAdd) break;
+          if (pickedNames.has(c.name)) continue;
+          pick(c);
+        }
+      }
+
+      // ── Write: one insert, one auto-tag upsert, mark curated ──
+      const allEntries = [...spellEntries, ...landEntries];
+      if (allEntries.length === 0) { setBrewView("review"); return; }
+      const inserted = await bulkInsertDeckCards(attachDeckId, allEntries);
+      const catByName = new Map(spellEntries.map(e => [e.card_name, e.categories]));
+      const tagPairs = inserted
+        .map(row => ({ deckCardId: row.id, tags: catByName.get(row.card_name) ?? [] }))
+        .filter(p => p.tags.length);
+      try { await bulkApplyAutoTags(tagPairs); } catch { /* heal re-applies later */ }
+      markHealed(inserted.map(r => r.id));
+
+      // Reflect in state: one entry per copy (basics expand to N).
+      const newCopies = [];
+      for (const e of allEntries) {
+        for (let i = 0; i < (e.quantity ?? 1); i++) {
+          newCopies.push({ name: e.card_name, instanceId: crypto.randomUUID() });
+        }
+      }
+      setDecklist(prev => [...prev, ...newCopies]);
+      setBrewView("review");
+    } catch {
+      /* best-effort — every write is additive, so a partial build is harmless */
+    } finally {
+      setBuilding(false);
+    }
   }
 
   // Load every deck card's WREC tags when review opens (and on resume), keyed
@@ -1468,6 +1603,8 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
             searchDraft={deckSearchDraft}
             onSearchDraftChange={setDeckSearchDraft}
             onAddCopy={session ? handleAddCopy : undefined}
+            onFinishDeck={session ? finishTheDeck : undefined}
+            building={building}
             anchorCard={anchorCard}
           />
         )}

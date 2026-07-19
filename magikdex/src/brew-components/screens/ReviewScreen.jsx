@@ -227,6 +227,7 @@ export default function ReviewScreen({
   onHand,
   searchDraft = "", onSearchDraftChange,
   onAddCopy,
+  onFinishDeck, building = false,
   anchorCard = null,
 }) {
   const [commanderName, setCommanderName] = useState("");
@@ -1153,6 +1154,31 @@ export default function ReviewScreen({
           </div>
         )}
 
+        {/* "Finish the 99" for a partial deck — top off toward 99 in one tap.
+            Only while live, non-empty, and under 99; the empty state has its own
+            "build my 99" below, and a full deck needs no prompt. */}
+        {live && totalCards > 0 && totalCards < 99 && onFinishDeck && (
+          <button
+            onClick={onFinishDeck}
+            disabled={building}
+            style={{
+              width: "100%", minHeight: 44, margin: "0 0 4px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "transparent",
+              border: "1px solid var(--primary)",
+              color: "var(--primary)",
+              fontFamily: "'Noto Sans Mono', monospace",
+              fontSize: 12, letterSpacing: "0.08em",
+              borderRadius: 0,
+              cursor: building ? "default" : "pointer",
+              opacity: building ? 0.6 : 1,
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {building ? "building…" : `finish the 99 · ${99 - totalCards} to go`}
+          </button>
+        )}
+
         {/* Change 2 — first-run empty state teaches instead of showing a lone
             "—" (which read as broken). Only when the whole deck is empty in a
             live session; a filtered-empty section still uses the "—" in
@@ -1177,17 +1203,40 @@ export default function ReviewScreen({
               fontSize: 12, lineHeight: 1.5,
               color: "var(--muted)",
             }}>
-              swipe to keep or cut, or add exact cards above
+              build a full 99 in one tap, or swipe them in yourself
             </div>
+            {onFinishDeck && (
+              <button
+                onClick={onFinishDeck}
+                disabled={building}
+                style={{
+                  minHeight: 44, marginTop: 4,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "0 24px",
+                  background: building ? "transparent" : "var(--primary)",
+                  border: "1px solid var(--primary)",
+                  color: building ? "var(--primary)" : "var(--bg)",
+                  fontFamily: "'Noto Sans Mono', monospace",
+                  fontSize: 13, letterSpacing: "0.1em",
+                  borderRadius: 0,
+                  cursor: building ? "default" : "pointer",
+                  opacity: building ? 0.7 : 1,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {building ? "building…" : "build my 99"}
+              </button>
+            )}
             <button
               onClick={onBrew}
+              disabled={building}
               style={{
-                minHeight: 44, marginTop: 4,
+                minHeight: 44,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 padding: "0 24px",
                 background: "transparent",
-                border: "1px solid var(--primary)",
-                color: "var(--primary)",
+                border: "1px solid var(--muted)",
+                color: "var(--muted)",
                 fontFamily: "'Noto Sans Mono', monospace",
                 fontSize: 13, letterSpacing: "0.1em",
                 borderRadius: 0,

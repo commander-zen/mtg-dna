@@ -46,6 +46,85 @@ const BASIC_FOR_COLOR = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G
 // MDFC is a spell, not a land).
 const isLandCard = c => Boolean(c?.type_line?.split("//")[0].includes("Land"));
 
+// Pure planner for "Finish the 99": given the current deck and the fetched
+// inputs, decide exactly which cards to ADD to reach 99. Lives at module scope
+// (not inside the component) on purpose — its mutating loops/closures would make
+// the React Compiler bail on the whole Brew component, and keeping it pure also
+// makes it testable. Returns { spellEntries, landEntries }.
+//   decklist        current deck rows [{ name }]
+//   haveData        name → card data for current cards (front-face land check)
+//   stack           legend's EDHREC spell stack (excludes lands)
+//   stackCatMap     oracle_id → WREC categories, for the stack
+//   currentCatMap   oracle_id → WREC categories, for cards already in the deck
+//   nonbasics       EDHREC-ordered nonbasic lands for the colour identity
+//   colorIdentity   e.g. ["R"] — drives which basics fill the mana base
+function planDeckFill({ decklist, haveData, stack, stackCatMap, currentCatMap, nonbasics, colorIdentity }) {
+  const haveNames = new Set(decklist.map(c => c.name));
+  const currentLandCount = decklist.filter(c => isLandCard(haveData?.[c.name])).length;
+  const currentTotal = decklist.length;
+
+  // Roles already present, so we fill the GAP toward each target, not the whole.
+  const roleCount = {};
+  for (const r of ROLE_FILL_ORDER) roleCount[r] = 0;
+  for (const cats of currentCatMap.values()) {
+    for (const cat of cats) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
+  }
+
+  // ── Lands: nonbasic staples first, basics fill the rest. Capped by remaining
+  // deck space so an already-large, under-landed deck can't overshoot 99. ──
+  const landsToAdd = Math.max(0, Math.min(LAND_TARGET - currentLandCount, DECK_SIZE - currentTotal));
+  const landEntries = [];
+  let addedLands = 0;
+  for (const c of nonbasics) {
+    if (addedLands >= landsToAdd) break;
+    if (haveNames.has(c.name)) continue;
+    landEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null });
+    haveNames.add(c.name);
+    addedLands += 1;
+  }
+  const remaining = landsToAdd - addedLands;
+  if (remaining > 0) {
+    const basicNames = colorIdentity.length
+      ? colorIdentity.map(col => BASIC_FOR_COLOR[col]).filter(Boolean) : ["Wastes"];
+    const perBasic = {};
+    for (let i = 0; i < remaining; i++) {
+      const name = basicNames[i % basicNames.length];
+      perBasic[name] = (perBasic[name] ?? 0) + 1;
+    }
+    for (const [name, qty] of Object.entries(perBasic)) {
+      landEntries.push({ card_name: name, quantity: qty, oracle_id: null });
+    }
+  }
+  const landCopies = landEntries.reduce((n, e) => n + e.quantity, 0);
+
+  // ── Nonland spells: role-fill toward targets, then top up to 99 ──
+  const nonlandToAdd = Math.max(0, DECK_SIZE - currentTotal - landCopies);
+  const spellEntries = [];
+  const catsOf = c => (c.oracle_id ? stackCatMap.get(c.oracle_id) : null) ?? [];
+  const usable = stack.filter(c => c?.name && !haveNames.has(c.name) && !isLandCard(c));
+  const pickedNames = new Set();
+  const addSpell = c => {
+    pickedNames.add(c.name);
+    spellEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null, categories: catsOf(c) });
+    for (const cat of catsOf(c)) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
+  };
+  for (const role of ROLE_FILL_ORDER) {
+    const target = CATEGORY_META[role]?.target ?? 0;
+    for (const c of usable) {
+      if (spellEntries.length >= nonlandToAdd || roleCount[role] >= target) break;
+      if (pickedNames.has(c.name) || !catsOf(c).includes(role)) continue;
+      addSpell(c);
+    }
+    if (spellEntries.length >= nonlandToAdd) break;
+  }
+  for (const c of usable) { // top-up sweep (covers plan + the remainder)
+    if (spellEntries.length >= nonlandToAdd) break;
+    if (pickedNames.has(c.name)) continue;
+    addSpell(c);
+  }
+  return { spellEntries, landEntries };
+}
+
 // Brew sub-screens are always dark — card art is designed against dark.
 // Jackson Storm "steel storm" recolor (UAT batch 2, item 3): near-black
 // grounds, one electric-steel accent replacing the old gold/amber, a dimmer
@@ -916,92 +995,27 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
     setBuilding(true);
     try {
       const ci = legendColorIdentity ?? [];
-      const haveNames = new Set(decklist.map(c => c.name));
+      const haveNames = [...new Set(decklist.map(c => c.name))];
 
-      // Current deck: resolve card data to count lands (by front face).
-      const { data: haveData } = haveNames.size
-        ? await getCardDataBatch([...haveNames]) : { data: {} };
-      const currentLandCount = decklist.filter(c => isLandCard(haveData?.[c.name])).length;
-      const currentTotal = decklist.length;
+      // Fetch inputs, then let the pure planner decide what to add.
+      const { data: haveData } = haveNames.length
+        ? await getCardDataBatch(haveNames) : { data: {} };
+      const currentCatMap = await autoWrecTags(
+        haveNames.map(n => haveData?.[n]?.oracle_id).filter(Boolean));
+      let nonbasics = [];
+      try {
+        const { cards } = await fetchFirstPageForSwipe(
+          withColorIdentity("t:land -t:basic", ci), { order: "edhrec", dir: "asc" });
+        nonbasics = cards ?? [];
+      } catch { nonbasics = []; }
+      const stack = await fetchBrewStack({ legendName: session.legend.name, colorIdentity: ci, excludeLands: true });
+      const stackCatMap = await autoWrecTags(stack.map(c => c.oracle_id).filter(Boolean));
 
-      // ── 1. Lands: nonbasic staples first, basics fill the rest ──
-      // Capped by remaining deck space so an already-large, under-landed deck
-      // can't overshoot 99 (we only add — we never cut spells to make room).
-      const landsToAdd = Math.max(0, Math.min(LAND_TARGET - currentLandCount, DECK_SIZE - currentTotal));
-      const landEntries = []; // { card_name, quantity, oracle_id }
-      if (landsToAdd > 0) {
-        let nonbasics = [];
-        try {
-          const { cards } = await fetchFirstPageForSwipe(
-            withColorIdentity("t:land -t:basic", ci), { order: "edhrec", dir: "asc" });
-          nonbasics = cards ?? [];
-        } catch { nonbasics = []; }
-        let added = 0;
-        for (const c of nonbasics) {
-          if (added >= landsToAdd) break;
-          if (haveNames.has(c.name)) continue;
-          landEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null });
-          haveNames.add(c.name);
-          added += 1;
-        }
-        const remaining = landsToAdd - added;
-        if (remaining > 0) {
-          const basicNames = ci.length
-            ? ci.map(col => BASIC_FOR_COLOR[col]).filter(Boolean) : ["Wastes"];
-          const perBasic = {};
-          for (let i = 0; i < remaining; i++) {
-            const name = basicNames[i % basicNames.length];
-            perBasic[name] = (perBasic[name] ?? 0) + 1;
-          }
-          for (const [name, qty] of Object.entries(perBasic)) {
-            landEntries.push({ card_name: name, quantity: qty, oracle_id: null });
-          }
-        }
-      }
-      const landCopies = landEntries.reduce((n, e) => n + e.quantity, 0);
+      const { spellEntries, landEntries } = planDeckFill({
+        decklist, haveData, stack, stackCatMap, currentCatMap, nonbasics, colorIdentity: ci,
+      });
 
-      // ── 2 + 3. Nonland spells: role-fill toward targets, then top up to 99 ──
-      const nonlandToAdd = Math.max(0, DECK_SIZE - currentTotal - landCopies);
-      const spellEntries = []; // { card_name, quantity:1, oracle_id, categories }
-      if (nonlandToAdd > 0) {
-        const stack = (await fetchBrewStack({ legendName: session.legend.name, colorIdentity: ci, excludeLands: true }))
-          .filter(c => c?.name && !haveNames.has(c.name) && !isLandCard(c));
-        const catMap = await autoWrecTags(stack.map(c => c.oracle_id).filter(Boolean));
-        const catsOf = c => (c.oracle_id ? catMap.get(c.oracle_id) : null) ?? [];
-
-        // Current per-role counts, so we fill the GAP not the whole target.
-        const roleCount = {};
-        for (const r of ROLE_FILL_ORDER) roleCount[r] = 0;
-        const haveOracle = [...haveNames].map(n => haveData?.[n]?.oracle_id).filter(Boolean);
-        const haveCats = await autoWrecTags(haveOracle);
-        for (const cats of haveCats.values()) {
-          for (const cat of cats) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
-        }
-
-        const pickedNames = new Set();
-        const pick = c => {
-          pickedNames.add(c.name);
-          spellEntries.push({ card_name: c.name, quantity: 1, oracle_id: c.oracle_id ?? null, categories: catsOf(c) });
-          for (const cat of catsOf(c)) if (roleCount[cat] !== undefined) roleCount[cat] += 1;
-        };
-        for (const role of ROLE_FILL_ORDER) {
-          const target = CATEGORY_META[role]?.target ?? 0;
-          for (const c of stack) {
-            if (spellEntries.length >= nonlandToAdd) break;
-            if (roleCount[role] >= target) break;
-            if (pickedNames.has(c.name) || !catsOf(c).includes(role)) continue;
-            pick(c);
-          }
-          if (spellEntries.length >= nonlandToAdd) break;
-        }
-        for (const c of stack) { // top-up sweep (covers plan + the remainder)
-          if (spellEntries.length >= nonlandToAdd) break;
-          if (pickedNames.has(c.name)) continue;
-          pick(c);
-        }
-      }
-
-      // ── Write: one insert, one auto-tag upsert, mark curated ──
+      // ── Write: one insert, one auto-tag upsert ──
       const allEntries = [...spellEntries, ...landEntries];
       if (allEntries.length === 0) { setBrewView("review"); return; }
       const inserted = await bulkInsertDeckCards(attachDeckId, allEntries);

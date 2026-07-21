@@ -1008,7 +1008,12 @@ export default function Brew({ session, onSessionDone, resetSignal }) {
           withColorIdentity("t:land -t:basic", ci), { order: "edhrec", dir: "asc" });
         nonbasics = cards ?? [];
       } catch { nonbasics = []; }
-      const stack = await fetchBrewStack({ legendName: session.legend.name, colorIdentity: ci, excludeLands: true });
+      // fetchDefaultStack (not fetchBrewStack) so a legend with NO EDHREC data
+      // still fills: brand-new/spoiled commanders have no brew_stack rows, and
+      // calling the RPC directly returned [] — the build then added 38 lands and
+      // zero spells. fetchDefaultStack falls back to a live colour-identity
+      // Scryfall seed, so a just-spoiled legend gets staples in its colours.
+      const stack = await fetchDefaultStack(ci, "edhrec", "asc", true);
       const stackCatMap = await autoWrecTags(stack.map(c => c.oracle_id).filter(Boolean));
 
       const { spellEntries, landEntries } = planDeckFill({
